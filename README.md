@@ -7,16 +7,18 @@
 ## 📑 Table of Contents
 
 1. [Project Overview](#project-overview)
-2. [System Architecture](#system-architecture)
-3. [Persona-Based Scenarios & Workflow](#persona-based-scenarios--workflow)
-4. [Weekly Premium Model & Parametric Triggers](#weekly-premium-model--parametric-triggers)
-5. [Platform Choice: Web vs. Mobile](#platform-choice-web-vs-mobile)
-6. [AI/ML Integration](#aiml-integration)
-7. [Tech Stack](#tech-stack)
-8. [Development Plan](#development-plan)
-9. [Additional Considerations](#additional-considerations)
-10. [How to Run the Demo](#how-to-run-the-demo)
-11. [Team & Contact](#team--contact)
+2. [Current App Flow](#current-app-flow)
+3. [Implemented Features](#implemented-features)
+4. [System Architecture](#system-architecture)
+5. [Persona-Based Scenarios & Workflow](#persona-based-scenarios--workflow)
+6. [Weekly Premium Model & Parametric Triggers](#weekly-premium-model--parametric-triggers)
+7. [Platform Choice: Web vs. Mobile](#platform-choice-web-vs-mobile)
+8. [AI/ML Integration](#aiml-integration)
+9. [Tech Stack](#tech-stack)
+10. [Development Plan](#development-plan)
+11. [Additional Considerations](#additional-considerations)
+12. [How to Run the Demo](#how-to-run-the-demo)
+13. [Team & Contact](#team--contact)
 
 ---
 
@@ -31,6 +33,29 @@
 ### Solution
 
 > *We offer a week premium plan where payouts are automatically triggered when specific parametric events occur (e.g., severe rainfall thresholds are crossed or API servers crash). The entire experience — from enrolment, live risk-assessment, to the instant automatic payout — happens directly via our Web App.*
+
+---
+
+## 🔄 Current App Flow
+
+- User signs up on the auth page and gets a calculated weekly premium.
+- The user must complete the demo Razorpay payment step before dashboard access is allowed.
+- After payment success, the dashboard, claims, plans, AI risk, history, and live map pages unlock.
+- Claims can trigger payout simulation with fraud checks and optional SMS alerts.
+
+---
+
+## ✅ Implemented Features
+
+- Weekly premium pricing using ML model (TensorFlow.js) or actuarial fallback, constrained to ₹20–₹50/week.
+- Demo Razorpay payment gate before dashboard access (supports UPI, card, netbanking, wallet).
+- Dashboard with policy snapshot, claims feed, income protection chart, and coverage summary.
+- GPS spoof detection using GPS vs IP distance, platform-login location, movement speed, GPS accuracy fingerprinting, claim frequency, and weather mismatch checks.
+- Live weather integration using OpenWeatherMap API with real-time risk scoring.
+- SMS payout notification flow through a separate Twilio SMS gateway (Cloudflare Worker or local Node server).
+- Browser-served TensorFlow premium model from `public/premium_model/`.
+- Live GPS map with pre-mapped risk zones across 5 Indian cities.
+- Disruption history log with aggregate stats and type breakdown.
 
 ---
 
@@ -210,12 +235,17 @@ Unlike traditional insurance, **no claim filing is required**. Payouts are trigg
 | Layer | Technology | Reason |
 |-------|-----------|--------|
 | UI Framework | React 18, TypeScript, Vite | Fast compilation, modern interactive ecosystem |
-| Styling | TailwindCSS, Shadcn/ui | Beautiful, rapid, responsive, accessible components |
+| Styling | Tailwind CSS v4, Shadcn/ui | Beautiful, rapid, responsive, accessible components |
 | Animations | Framer Motion | Provides micro-animations (crucial for premium UX) |
+| Routing | React Router | Client-side navigation and protected routes |
+| Maps | Leaflet | Live GPS map with risk zone overlays |
+| Charts | Recharts | Income protection and disruption trend charts |
+| Notifications | Sonner | Toast alerts for claims and payment events |
 
 ### AI/ML
 | Component | Technology | Reason |
 |-----------|-----------|--------|
+| In-browser Inference | TensorFlow.js | Runs trained premium model directly in the browser |
 | Model Training | Python, Pandas, Numpy, scikit-learn | Proven data science foundation for non-linear regression |
 | Dashboards | Streamlit | Rapid creation of Machine Learning visualizers |
 | Connectivity | Localtunnel / Ngrok | Exposing Colab/Streamlit services to the public web |
@@ -223,6 +253,8 @@ Unlike traditional insurance, **no claim filing is required**. Payouts are trigg
 ### Infrastructure & Integrations
 | Component | Technology |
 |-----------|-----------|
+| Payment Gateway | Razorpay (UPI, card, netbanking, wallet) |
+| SMS Notifications | Twilio via Cloudflare Worker or local Node server |
 | Weather Data API | OpenWeatherMap API |
 | Geolocation | HTML5 Geolocation API, IP-API |
 
@@ -262,21 +294,59 @@ Unlike traditional insurance, **no claim filing is required**. Payouts are trigg
 
 ## 🚀 How to Run the Demo
 
-### Part 1: The React Prototype (Anti-Fraud & UX)
-1. Install dependencies: `npm install`
-2. Start the app: `npm run dev`
-3. Navigate to `http://localhost:5173`
+### Prerequisites
+- Node.js 18+
+- npm 9+
+- Python 3.10+ *(only required to regenerate the Colab notebook or retrain ML assets)*
+
+### Part 1: The React App
+
+**1. Install dependencies**
+```bash
+npm install
+```
+
+**2. Set up environment variables**
+
+Copy `.env.example` to `.env` and fill in your keys:
+```bash
+cp .env.example .env
+```
+
+```env
+VITE_OPENWEATHER_API_KEY=your_openweather_api_key
+VITE_RAZORPAY_KEY_ID=your_razorpay_key_id
+VITE_SMS_API_URL=http://localhost:8787/api/sms/send
+TWILIO_ACCOUNT_SID=your_twilio_account_sid
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+TWILIO_FROM_NUMBER=+1XXXXXXXXXX
+```
+
+**3. Start the development server**
+```bash
+npm run dev
+```
+
+Navigate to `http://localhost:5173`
+
+**4. (Optional) Start the SMS gateway**
+```bash
+node sms-gateway/server.mjs
+```
+
+---
 
 ### Part 2: The ML Engine Visualizer (For Technical Judges)
-We've provided two ways for technical judges to run and verify the underlying Machine Learning Math Engine:
 
-**Method A: Google Colab (Zero-Setup - Recommended)**
-1. Go to [Google Colab](https://colab.research.google.com/) and upload the `InsureGig_Colab.ipynb` file.
-2. Run all cells. It will instantly generate a live, publicly accessible Localtunnel/Ngrok URL where judges can interact with the Random Forest sliders right in their browser!
+**Method A: Google Colab (Zero-Setup — Recommended)**
+1. Go to [Google Colab](https://colab.research.google.com/) and upload `InsureGig_Colab.ipynb`.
+2. Run all cells. It will generate a live Localtunnel/Ngrok URL where judges can interact with the Random Forest sliders in their browser.
 
 **Method B: Run Locally**
-1. `pip install -r ai_model/requirements.txt`
-2. `streamlit run ai_model/streamlit_app.py`
+```bash
+pip install -r ai_model/requirements.txt
+streamlit run ai_model/streamlit_app.py
+```
 
 ---
 
