@@ -15,6 +15,8 @@ const loadRazorpayScript = (): Promise<boolean> => {
 const RAZORPAY_KEY_ID = import.meta.env.VITE_RAZORPAY_KEY_ID;
 
 export const useRazorpay = () => {
+    const isConfigured = Boolean(RAZORPAY_KEY_ID);
+
     const openPayment = async ({
         amount,
         name,
@@ -35,10 +37,8 @@ export const useRazorpay = () => {
             return;
         }
 
-        if (!RAZORPAY_KEY_ID) {
-            window.setTimeout(() => {
-                onSuccess(`demo_pay_${Date.now()}`);
-            }, 800);
+        if (!isConfigured) {
+            onFailure(new Error("Razorpay key is missing. Add VITE_RAZORPAY_KEY_ID and restart the app."));
             return;
         }
 
@@ -48,6 +48,14 @@ export const useRazorpay = () => {
             currency: "INR",
             name: "InsureGig",
             description: description,
+            config: {
+                display: {
+                    sequence: ["upi", "card", "netbanking", "wallet"],
+                    preferences: {
+                        show_default_blocks: true,
+                    },
+                },
+            },
             handler: function (response: any) {
                 onSuccess(response.razorpay_payment_id);
             },
@@ -70,5 +78,5 @@ export const useRazorpay = () => {
         paymentObject.open();
     };
 
-    return { openPayment };
+    return { openPayment, isConfigured };
 };

@@ -2,11 +2,11 @@ import { createBrowserRouter } from "react-router";
 import { LandingPage } from "./pages/landing-page";
 import { AuthPage } from "./pages/auth-page";
 import { DashboardLayout } from "./pages/dashboard-layout";
-import { DashboardHome } from "./pages/dashboard-home";
+import { DashboardHomeLive } from "./pages/dashboard-home-live";
 import { PlansPage } from "./pages/plans-page";
 import { RiskInsightsPage } from "./pages/risk-insights-page";
 import { ClaimsPage } from "./pages/claims-page";
-import { HistoryPage } from "./pages/history-page";
+import { HistoryPageLive } from "./pages/history-page-live";
 import { LiveMapPage } from "./pages/live-map-page";
 
 export const router = createBrowserRouter([
@@ -22,11 +22,11 @@ export const router = createBrowserRouter([
     path: "/dashboard",
     Component: DashboardLayout,
     children: [
-      { index: true, Component: DashboardHome },
+      { index: true, Component: DashboardHomeLive },
       { path: "plans", Component: PlansPage },
       { path: "risk", Component: RiskInsightsPage },
       { path: "claims", Component: ClaimsPage },
-      { path: "history", Component: HistoryPage },
+      { path: "history", Component: HistoryPageLive },
       { path: "live-map", Component: LiveMapPage },
     ],
   },
