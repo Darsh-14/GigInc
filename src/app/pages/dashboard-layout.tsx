@@ -1,4 +1,5 @@
 import { Outlet, useNavigate, useLocation } from "react-router";
+import { useEffect, useState } from "react";
 import { Shield, LayoutDashboard, FileText, AlertCircle, History, Settings, LogOut, Navigation } from "lucide-react";
 import logoGig from "../../../assets/LogoGig.jpeg";
 import { Button } from "../components/ui/button";
@@ -6,6 +7,7 @@ import { Button } from "../components/ui/button";
 export function DashboardLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [accessReady, setAccessReady] = useState(false);
 
   const menuItems = [
     { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -20,6 +22,29 @@ export function DashboardLayout() {
     localStorage.removeItem("user");
     navigate("/");
   };
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem("user");
+    if (!savedUser) {
+      navigate("/auth", { replace: true });
+      return;
+    }
+
+    try {
+      const user = JSON.parse(savedUser);
+      if (user?.premiumStatus !== "paid") {
+        navigate("/auth", { replace: true });
+        return;
+      }
+      setAccessReady(true);
+    } catch {
+      navigate("/auth", { replace: true });
+    }
+  }, [navigate]);
+
+  if (!accessReady) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
