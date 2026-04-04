@@ -13,13 +13,29 @@ export function RiskInsightsPage() {
 
   useEffect(() => {
     const fetchRiskData = async () => {
-      // 1. Try Live GPS first
+      const savedGps = localStorage.getItem("insuregig_gps_coords");
+      const parsedGps = savedGps ? JSON.parse(savedGps) : null;
+      const hasFreshTrackedGps = parsedGps && (Date.now() - parsedGps.ts < 5 * 60 * 1000);
+
+      if (hasFreshTrackedGps) {
+        const data = await fetchWeatherByCoords(parsedGps.lat, parsedGps.lon);
+        if (data.success) {
+          setLocationName(data.name || "your area");
+          setWeatherData({ temp: data.temp, desc: data.description, severity: data.severity });
+          setIsLiveGps(true);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Fall back to direct browser GPS if there is no recent tracker fix.
       if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(
           async (position) => {
             const { latitude, longitude } = position.coords;
             const data = await fetchWeatherByCoords(latitude, longitude);
             if (data.success) {
+              localStorage.setItem("insuregig_gps_coords", JSON.stringify({ lat: latitude, lon: longitude, ts: Date.now() }));
               setLocationName(data.name || "your area");
               setWeatherData({ temp: data.temp, desc: data.description, severity: data.severity });
               setIsLiveGps(true);
@@ -53,8 +69,17 @@ export function RiskInsightsPage() {
     fetchRiskData();
   }, []);
 
-  // Calculate dynamic visual states based on the real weather severity
-  const riskScore = loading ? 75 : Math.min(100, Math.max(10, weatherData.severity + 15)); // Add baseline 15 for traffic/AQI mock
+  // Blend weather with lighter AQI and demand placeholders so only stronger conditions become "high".
+  const demandRisk = 18;
+  const aqiRisk = 40;
+  const riskScore = loading
+    ? 55
+    : Math.round(
+        Math.min(
+          100,
+          Math.max(5, weatherData.severity * 0.65 + aqiRisk * 0.2 + demandRisk * 0.15),
+        ),
+      );
   
   let riskLevelLabel = "LOW 🟢";
   let bgGradient = "from-green-50 to-emerald-50";
@@ -115,7 +140,7 @@ export function RiskInsightsPage() {
       </Card>
 
       {/* AI Prediction */}
-      <Card className="border-blue-200 shadow-sm">
+      <Card className="border-brand-200 shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <span className="text-2xl">🧠</span>
@@ -123,8 +148,8 @@ export function RiskInsightsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className={`p-4 rounded-lg border ${riskScore > 60 ? 'bg-orange-50 border-orange-200' : 'bg-blue-50 border-blue-200'}`}>
-            <p className={`text-lg font-semibold mb-2 ${riskScore > 60 ? 'text-orange-900' : 'text-blue-900'}`}>
+          <div className={`p-4 rounded-lg border ${riskScore > 60 ? 'bg-orange-50 border-orange-200' : 'bg-brand-50 border-brand-200'}`}>
+            <p className={`text-lg font-semibold mb-2 ${riskScore > 60 ? 'text-orange-900' : 'text-brand-900'}`}>
               {riskScore}% chance of disruption today
             </p>
             <p className="text-gray-700">
@@ -134,8 +159,8 @@ export function RiskInsightsPage() {
             </p>
           </div>
           <div className="text-sm text-gray-500 flex items-center justify-between">
-            <p>Updated: Just now • Next poll: In 15 minutes</p>
-            {isLiveGps && <p className="text-blue-600 font-medium text-xs">Lat/Lon data synchronized</p>}
+            <p>Updated: Just now • Source: {isLiveGps ? "Live GPS weather" : "Profile location fallback"}</p>
+            {isLiveGps && <p className="text-brand-500 font-medium text-xs">Lat/Lon data synchronized</p>}
           </div>
         </CardContent>
       </Card>
@@ -147,7 +172,7 @@ export function RiskInsightsPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
-                <Cloud className={`w-5 h-5 ${weatherData.severity > 50 ? 'text-blue-600' : 'text-gray-500'}`} />
+                <Cloud className={`w-5 h-5 ${weatherData.severity > 50 ? 'text-brand-500' : 'text-gray-500'}`} />
                 Live Weather
               </CardTitle>
               {weatherData.severity > 60 ? <Badge className="bg-red-600">Severe</Badge> : 
@@ -230,7 +255,7 @@ export function RiskInsightsPage() {
               <MapPin className="w-5 h-5 text-red-500" />
               Live Risk Map: <span className="capitalize border-b border-dashed border-gray-400 pb-0.5">{locationName}</span>
             </div>
-            {isLiveGps && <span className="text-xs font-normal text-blue-600 flex items-center"><Navigation className="w-3 h-3 mr-1"/> GPS Synced</span>}
+            {isLiveGps && <span className="text-xs font-normal text-brand-500 flex items-center"><Navigation className="w-3 h-3 mr-1"/> GPS Synced</span>}
           </CardTitle>
         </CardHeader>
         <CardContent>

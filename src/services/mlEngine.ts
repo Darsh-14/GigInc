@@ -1,39 +1,191 @@
-import * as tf from '@tensorflow/tfjs';
+﻿import * as tf from '@tensorflow/tfjs';
 
-// ─── Disruption model (in-browser, synthetic) ────────────────────────────────
 let insuranceModel: tf.LayersModel | null = null;
 let isTraining = false;
 
-// ─── Premium model (pretrained on real data, loaded from public/) ─────────────
 let premiumModel: tf.LayersModel | null = null;
 let premiumModelLoading = false;
 
-// Encoding maps — MUST match InsureGig_Colab.ipynb exactly
-const CITY_ENC:    Record<string, number> = { Metropolitian: 1.0, Urban: 0.5, 'Semi-Urban': 0.0 };
-const WEATHER_ENC: Record<string, number> = { Sunny: 0.0, Cloudy: 0.17, Windy: 0.33, Fog: 0.50, Sandstorms: 0.67, Stormy: 1.0 };
+const CITY_ENC: Record<string, number> = { Metropolitian: 1.0, Urban: 0.5, 'Semi-Urban': 0.0 };
+const WEATHER_ENC: Record<string, number> = { Sunny: 0.0, Cloudy: 0.17, Windy: 0.33, Fog: 0.5, Sandstorms: 0.67, Stormy: 1.0 };
 const TRAFFIC_ENC: Record<string, number> = { Low: 0.0, Medium: 0.33, High: 0.67, Jam: 1.0 };
 const VEHICLE_ENC: Record<string, number> = { electric_scooter: 0.0, bicycle: 0.33, scooter: 0.67, motorcycle: 1.0 };
-const TOD_ENC:     Record<string, number> = { Morning: 0.0, Afternoon: 0.33, Evening: 0.67, Night: 1.0 };
+const TOD_ENC: Record<string, number> = { Morning: 0.0, Afternoon: 0.33, Evening: 0.67, Night: 1.0 };
 
 const CITY_INCOME: Record<string, number> = { Metropolitian: 700, Urban: 550, 'Semi-Urban': 420 };
+
+export type PerilType = 'weather' | 'aqi' | 'traffic' | 'platform_outage';
+export type ActivityTier = 'low' | 'medium' | 'high';
 
 export interface PremiumProfile {
   age: number;
   ratings: number;
-  vehicleCondition: number;     // 0–3
-  multipleDeliveries: number;   // 0–3
+  vehicleCondition: number;
+  multipleDeliveries: number;
   festival: boolean;
   isNightShift: boolean;
   distanceKm: number;
-  experienceTier: number;       // 0–3
-  city: string;                 // 'Metropolitian' | 'Urban' | 'Semi-Urban'
-  weather: string;              // 'Sunny' | 'Cloudy' | 'Windy' | 'Fog' | 'Sandstorms' | 'Stormy'
-  traffic: string;              // 'Low' | 'Medium' | 'High' | 'Jam'
-  vehicle: string;              // 'motorcycle' | 'scooter' | 'electric_scooter' | 'bicycle'
-  timeOfDay: string;            // 'Morning' | 'Afternoon' | 'Evening' | 'Night'
+  experienceTier: number;
+  city: string;
+  weather: string;
+  traffic: string;
+  vehicle: string;
+  timeOfDay: string;
+  dailyIncome?: number;
+  perilType?: PerilType;
+  activityTier?: ActivityTier;
+  triggerProbability?: number;
+  daysExposed?: number;
 }
 
-// ─── Load pretrained premium model from public/premium_model/ ────────────────
+export interface PremiumInputs {
+  triggerProbability: number;
+  avgIncomeLostPerDay: number;
+  daysExposed: number;
+  cityFactor: number;
+  perilFactor: number;
+  activityFactor: number;
+  basePremium: number;
+  adjustedPremium: number;
+}
+
+const WEEKLY_MIN = 20;
+const WEEKLY_MAX = 50;
+
+const CITY_TRIGGER_BASE: Record<string, number> = {
+  Metropolitian: 0.2,
+  Urban: 0.15,
+  'Semi-Urban': 0.11,
+};
+
+const CITY_FACTOR: Record<string, number> = {
+  Metropolitian: 1.12,
+  Urban: 1.0,
+  'Semi-Urban': 0.9,
+};
+
+const PERIL_TRIGGER_FACTOR: Record<PerilType, number> = {
+  weather: 1.2,
+  aqi: 1.12,
+  traffic: 1.08,
+  platform_outage: 0.95,
+};
+
+const PERIL_LOSS_FRACTION: Record<PerilType, number> = {
+  weather: 0.24,
+  aqi: 0.2,
+  traffic: 0.16,
+  platform_outage: 0.26,
+};
+
+const PERIL_FACTOR: Record<PerilType, number> = {
+  weather: 1.15,
+  aqi: 1.08,
+  traffic: 1.03,
+  platform_outage: 1.0,
+};
+
+const PERIL_EXPOSURE_DAYS: Record<PerilType, number> = {
+  weather: 3,
+  aqi: 2,
+  traffic: 2,
+  platform_outage: 1,
+};
+
+const ACTIVITY_TRIGGER_FACTOR: Record<ActivityTier, number> = {
+  low: 0.9,
+  medium: 1.0,
+  high: 1.12,
+};
+
+const ACTIVITY_FACTOR: Record<ActivityTier, number> = {
+  low: 0.9,
+  medium: 1.0,
+  high: 1.14,
+};
+
+const ACTIVITY_LOSS_FACTOR: Record<ActivityTier, number> = {
+  low: 0.85,
+  medium: 1.0,
+  high: 1.12,
+};
+
+function derivePerilType(profile: PremiumProfile): PerilType {
+  if (profile.perilType) return profile.perilType;
+
+  if (profile.weather === 'Stormy' || profile.weather === 'Sandstorms') return 'weather';
+  if (profile.weather === 'Fog') return 'aqi';
+  if (profile.traffic === 'Jam' || profile.traffic === 'High') return 'traffic';
+  return 'platform_outage';
+}
+
+function deriveActivityTier(profile: PremiumProfile): ActivityTier {
+  if (profile.activityTier) return profile.activityTier;
+
+  if (profile.multipleDeliveries >= 2 || profile.isNightShift) return 'high';
+  if (profile.multipleDeliveries <= 0) return 'low';
+  return 'medium';
+}
+
+function deriveDailyIncome(profile: PremiumProfile): number {
+  if (profile.dailyIncome && Number.isFinite(profile.dailyIncome)) {
+    return Math.min(1200, Math.max(200, profile.dailyIncome));
+  }
+
+  return Math.max(
+    200,
+    Math.min(
+      1200,
+      (CITY_INCOME[profile.city] ?? 500) +
+        profile.multipleDeliveries * 80 +
+        (profile.festival ? 150 : 0) +
+        (profile.isNightShift ? 80 : 0) -
+        (2 - profile.vehicleCondition) * 30,
+    ),
+  );
+}
+
+export function calculateActuarialInputs(profile: PremiumProfile): PremiumInputs {
+  const perilType = derivePerilType(profile);
+  const activityTier = deriveActivityTier(profile);
+  const dailyIncome = deriveDailyIncome(profile);
+
+  const cityTrigger = CITY_TRIGGER_BASE[profile.city] ?? 0.14;
+  const perilTrigger = PERIL_TRIGGER_FACTOR[perilType] ?? 1.0;
+  const activityTrigger = ACTIVITY_TRIGGER_FACTOR[activityTier] ?? 1.0;
+
+  const triggerProbability = Math.min(
+    0.45,
+    Math.max(0.05, profile.triggerProbability ?? cityTrigger * perilTrigger * activityTrigger),
+  );
+
+  const avgIncomeLostPerDay =
+    dailyIncome * (PERIL_LOSS_FRACTION[perilType] ?? 0.2) * (ACTIVITY_LOSS_FACTOR[activityTier] ?? 1.0);
+
+  const daysExposed = Math.min(
+    7,
+    Math.max(1, Math.round(profile.daysExposed ?? PERIL_EXPOSURE_DAYS[perilType] ?? 2)),
+  );
+
+  const cityFactor = CITY_FACTOR[profile.city] ?? 1.0;
+  const perilFactor = PERIL_FACTOR[perilType] ?? 1.0;
+  const activityFactor = ACTIVITY_FACTOR[activityTier] ?? 1.0;
+
+  const basePremium = triggerProbability * avgIncomeLostPerDay * daysExposed;
+  const adjustedPremium = basePremium * cityFactor * perilFactor * activityFactor;
+
+  return {
+    triggerProbability,
+    avgIncomeLostPerDay,
+    daysExposed,
+    cityFactor,
+    perilFactor,
+    activityFactor,
+    basePremium,
+    adjustedPremium,
+  };
+}
+
 export async function loadPremiumModel(): Promise<boolean> {
   if (premiumModel) return true;
   if (premiumModelLoading) return false;
@@ -41,11 +193,11 @@ export async function loadPremiumModel(): Promise<boolean> {
 
   try {
     premiumModel = await tf.loadLayersModel('/premium_model/model.json');
-    console.log('[InsureGig] Pretrained premium model loaded from real data.');
+    console.log('[InsureGig] Premium model loaded from public/premium_model.');
     premiumModelLoading = false;
     return true;
   } catch (err) {
-    console.warn('[InsureGig] Pretrained model not found, will use actuarial rules.', err);
+    console.warn('[InsureGig] Premium model missing; using actuarial fallback.', err);
     premiumModelLoading = false;
     return false;
   }
@@ -55,15 +207,8 @@ export function isPremiumModelReady(): boolean {
   return premiumModel !== null;
 }
 
-// ─── Build 14-feature vector (identical order to Colab build_features) ────────
 function buildFeatureVector(profile: PremiumProfile): number[] {
-  const dailyIncome = Math.max(200, Math.min(1200,
-    (CITY_INCOME[profile.city] ?? 500)
-    + profile.multipleDeliveries * 80
-    + (profile.festival ? 150 : 0)
-    + (profile.isNightShift ? 80 : 0)
-    - (2 - profile.vehicleCondition) * 30
-  ));
+  const dailyIncome = deriveDailyIncome(profile);
 
   return [
     (Math.min(Math.max(profile.age, 15), 60) - 15) / 45.0,
@@ -74,16 +219,15 @@ function buildFeatureVector(profile: PremiumProfile): number[] {
     profile.isNightShift ? 1.0 : 0.0,
     Math.min(profile.distanceKm, 30) / 30.0,
     Math.min(profile.experienceTier, 3) / 3.0,
-    CITY_ENC[profile.city]    ?? 0.5,
-    WEATHER_ENC[profile.weather]  ?? 0.33,
-    TRAFFIC_ENC[profile.traffic]  ?? 0.33,
-    VEHICLE_ENC[profile.vehicle]  ?? 0.5,
-    TOD_ENC[profile.timeOfDay]    ?? 0.33,
+    CITY_ENC[profile.city] ?? 0.5,
+    WEATHER_ENC[profile.weather] ?? 0.33,
+    TRAFFIC_ENC[profile.traffic] ?? 0.33,
+    VEHICLE_ENC[profile.vehicle] ?? 0.5,
+    TOD_ENC[profile.timeOfDay] ?? 0.33,
     dailyIncome / 1200.0,
   ];
 }
 
-// ─── Predict premium using pretrained model ───────────────────────────────────
 export async function predictPremium(profile: PremiumProfile): Promise<number> {
   if (!premiumModel) {
     throw new Error('Premium model not loaded. Call loadPremiumModel() first.');
@@ -97,34 +241,31 @@ export async function predictPremium(profile: PremiumProfile): Promise<number> {
   inputTensor.dispose();
   output.dispose();
 
-  return Math.max(49, Math.round(result[0]));
+  const raw = result[0];
+
+  // If model outputs above target range it means it was trained on old targets
+  // and needs retraining. Throw so caller falls back to actuarial.
+  if (raw > WEEKLY_MAX) {
+    throw new Error(
+      `Premium model output ₹${Math.round(raw)} exceeds target range — retrain required.`,
+    );
+  }
+
+  return Math.min(WEEKLY_MAX, Math.max(WEEKLY_MIN, Math.round(raw)));
 }
 
-// ─── Actuarial fallback (no model needed) ────────────────────────────────────
 export function calculatePremiumActuarial(profile: PremiumProfile): number {
-  const CITY_MULT:    Record<string, number> = { Metropolitian: 1.40, Urban: 1.20, 'Semi-Urban': 1.00 };
-  const WEATHER_MULT: Record<string, number> = { Stormy: 1.60, Sandstorms: 1.50, Fog: 1.40, Windy: 1.10, Cloudy: 1.05, Sunny: 1.00 };
-  const TRAFFIC_MULT: Record<string, number> = { Jam: 1.50, High: 1.30, Medium: 1.10, Low: 1.00 };
-  const VEHICLE_MULT: Record<string, number> = { bicycle: 1.25, scooter: 1.10, motorcycle: 1.00, electric_scooter: 0.95 };
-
-  let p = 49;
-  p *= CITY_MULT[profile.city]       ?? 1.15;
-  p *= WEATHER_MULT[profile.weather] ?? 1.05;
-  p *= TRAFFIC_MULT[profile.traffic] ?? 1.10;
-  p *= VEHICLE_MULT[profile.vehicle] ?? 1.00;
-  p *= [1.00, 1.15, 1.25, 1.30][Math.min(profile.multipleDeliveries, 3)];
-  p *= profile.festival ? 1.20 : 1.00;
-  p *= profile.age < 22 ? 1.20 : profile.age > 45 ? 1.10 : profile.age > 35 ? 1.10 : 1.00;
-  p *= profile.ratings > 4.5 ? 0.90 : profile.ratings < 4.0 ? 1.15 : 1.00;
-  p *= profile.isNightShift ? 1.25 : 1.00;
-  p *= [1.20, 1.10, 1.00, 0.90][Math.min(profile.experienceTier, 3)];
-  return Math.max(49, Math.round(p));
+  const inputs = calculateActuarialInputs(profile);
+  // Normalize raw formula output into [WEEKLY_MIN, WEEKLY_MAX] so risk
+  // differences produce visible variation rather than all hitting the cap.
+  // RAW_FLOOR/CEIL calibrated against the formula's realistic output range.
+  const RAW_FLOOR = 3;
+  const RAW_CEIL = 80;
+  const clamped = Math.min(RAW_CEIL, Math.max(RAW_FLOOR, inputs.adjustedPremium));
+  const normalized =
+    WEEKLY_MIN + ((clamped - RAW_FLOOR) / (RAW_CEIL - RAW_FLOOR)) * (WEEKLY_MAX - WEEKLY_MIN);
+  return Math.round(normalized);
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// DISRUPTION LOSS MODEL — in-browser synthetic training (unchanged)
-// Used by claims-page.tsx for the parametric payout simulation
-// ═══════════════════════════════════════════════════════════════════════════════
 
 export function generateTrainingData(samples = 3000) {
   const xs: number[][] = [];
@@ -132,9 +273,9 @@ export function generateTrainingData(samples = 3000) {
 
   for (let i = 0; i < samples; i++) {
     const severity = Math.random();
-    const demand   = Math.random();
-    let baseLoss   = severity * 0.6 + (1 - demand) * 0.4;
-    baseLoss      += Math.random() * 0.3 - 0.15;
+    const demand = Math.random();
+    let baseLoss = severity * 0.6 + (1 - demand) * 0.4;
+    baseLoss += Math.random() * 0.3 - 0.15;
     xs.push([severity, demand]);
     ys.push([Math.max(0, Math.min(1, baseLoss))]);
   }
@@ -160,8 +301,8 @@ export async function trainInsuranceModel(onProgress?: (epoch: number, loss: num
     callbacks: {
       onEpochEnd: (epoch, logs) => {
         if (onProgress && logs) onProgress(epoch + 1, logs.loss);
-      }
-    }
+      },
+    },
   });
 
   insuranceModel = model;
@@ -181,8 +322,8 @@ export async function predictDisruptionLoss(severityScore: number, demandPercent
   }
 
   const inputTensor = tf.tensor2d([[severityScore / 100.0, demandPercentage / 100.0]]);
-  const prediction  = insuranceModel.predict(inputTensor) as tf.Tensor;
-  const result      = await prediction.data();
+  const prediction = insuranceModel.predict(inputTensor) as tf.Tensor;
+  const result = await prediction.data();
 
   inputTensor.dispose();
   prediction.dispose();

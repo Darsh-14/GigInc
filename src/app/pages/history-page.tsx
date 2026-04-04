@@ -85,7 +85,7 @@ export function HistoryPage() {
             <CardTitle className="text-sm font-medium text-gray-600">
               Total Claims
             </CardTitle>
-            <CalendarDays className="w-5 h-5 text-blue-600" />
+            <CalendarDays className="w-5 h-5 text-brand-500" />
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-gray-900">{historyData.length}</div>
@@ -146,7 +146,7 @@ export function HistoryPage() {
                       <TableCell className="font-medium">{claim.date}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Icon className="w-4 h-4 text-blue-600" />
+                          <Icon className="w-4 h-4 text-brand-500" />
                           <span>{claim.event}</span>
                         </div>
                       </TableCell>
@@ -178,7 +178,7 @@ export function HistoryPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
               <div className="flex items-center gap-3">
-                <Cloud className="w-5 h-5 text-blue-600" />
+                <Cloud className="w-5 h-5 text-brand-500" />
                 <div>
                   <p className="font-medium text-gray-900">Rain-related Claims</p>
                   <p className="text-sm text-gray-600">3 claims</p>
@@ -221,12 +221,12 @@ export function HistoryPage() {
       </Card>
 
       {/* Insights */}
-      <Card className="border-blue-200 bg-blue-50">
+      <Card className="border-brand-200 bg-brand-50">
         <CardContent className="pt-6">
           <div className="flex items-start gap-3">
-            <TrendingDown className="w-6 h-6 text-blue-600 mt-0.5" />
+            <TrendingDown className="w-6 h-6 text-brand-500 mt-0.5" />
             <div>
-              <p className="font-semibold text-blue-900 mb-1">Insights</p>
+              <p className="font-semibold text-brand-900 mb-1">Insights</p>
               <p className="text-sm text-gray-700">
                 Your claims are mostly weather-related. Consider checking AI risk predictions daily 
                 to plan your work hours better. Your average claim processing time is under 5 minutes 

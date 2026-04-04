@@ -1,0 +1,43 @@
+{
+  "weekly_min": 20,
+  "weekly_max": 50,
+  "formula": "trigger_probability * avg_income_lost_per_day * days_exposed with city/peril/activity adjustments",
+  "encodings": {
+    "city": {
+      "Metropolitian": 1.0,
+      "Urban": 0.5,
+      "Semi-Urban": 0.0
+    },
+    "weather": {
+      "Sunny": 0.0,
+      "Cloudy": 0.17,
+      "Windy": 0.33,
+      "Fog": 0.5,
+      "Sandstorms": 0.67,
+      "Stormy": 1.0
+    },
+    "traffic": {
+      "Low": 0.0,
+      "Medium": 0.33,
+      "High": 0.67,
+      "Jam": 1.0
+    },
+    "vehicle": {
+      "electric_scooter": 0.0,
+      "bicycle": 0.33,
+      "scooter": 0.67,
+      "motorcycle": 1.0
+    },
+    "time_of_day": {
+      "Morning": 0.0,
+      "Afternoon": 0.33,
+      "Evening": 0.67,
+      "Night": 1.0
+    }
+  },
+  "model_info": {
+    "rmse_inr": 0.64,
+    "mae_inr": 0.42,
+    "r2": 0.9953
+  }
+}

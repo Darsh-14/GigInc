@@ -1,5 +1,6 @@
 import { Outlet, useNavigate, useLocation } from "react-router";
-import { Shield, LayoutDashboard, FileText, AlertCircle, History, Settings, LogOut } from "lucide-react";
+import { Shield, LayoutDashboard, FileText, AlertCircle, History, Settings, LogOut, Navigation } from "lucide-react";
+import logoGig from "../../../assets/LogoGig.jpeg";
 import { Button } from "../components/ui/button";
 
 export function DashboardLayout() {
@@ -11,6 +12,7 @@ export function DashboardLayout() {
     { path: "/dashboard/plans", label: "My Policy", icon: FileText },
     { path: "/dashboard/claims", label: "Claims", icon: AlertCircle },
     { path: "/dashboard/risk", label: "AI Risk", icon: Shield },
+    { path: "/dashboard/live-map", label: "Live Map", icon: Navigation },
     { path: "/dashboard/history", label: "History", icon: History },
   ];
 
@@ -24,9 +26,8 @@ export function DashboardLayout() {
       {/* Sidebar — desktop only */}
       <aside className="w-64 bg-white border-r hidden md:flex flex-col">
         <div className="p-6 border-b">
-          <div className="flex items-center gap-2">
-            <Shield className="w-8 h-8 text-blue-600" />
-            <span className="text-xl font-bold text-blue-900">InsureGig</span>
+          <div className="flex items-center">
+            <img src={logoGig} alt="InsureGig" className="h-24 w-auto object-contain" />
           </div>
         </div>
 
@@ -40,7 +41,7 @@ export function DashboardLayout() {
                 onClick={() => navigate(item.path)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                   isActive
-                    ? "bg-blue-100 text-blue-700"
+                    ? "bg-brand-100 text-brand-700"
                     : "text-gray-700 hover:bg-gray-100"
                 }`}
               >
@@ -73,8 +74,7 @@ export function DashboardLayout() {
       {/* Mobile Top Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b p-4 z-20 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Shield className="w-6 h-6 text-blue-600" />
-          <span className="text-lg font-bold text-blue-900">InsureGig</span>
+          <img src={logoGig} alt="InsureGig" className="h-16 w-auto object-contain" />
         </div>
         <button
           onClick={handleLogout}
@@ -104,14 +104,14 @@ export function DashboardLayout() {
               onClick={() => navigate(item.path)}
               className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
                 isActive
-                  ? "text-blue-600"
-                  : "text-gray-500 hover:text-blue-500"
+                  ? "text-brand-500"
+                  : "text-gray-500 hover:text-brand-500"
               }`}
             >
               <Icon className={`w-5 h-5 ${isActive ? "stroke-[2.5]" : ""}`} />
               <span className="text-[10px] font-medium leading-tight">{item.label}</span>
               {isActive && (
-                <span className="absolute bottom-0 w-6 h-0.5 bg-blue-600 rounded-full" />
+                <span className="absolute bottom-0 w-6 h-0.5 bg-brand-500 rounded-full" />
               )}
             </button>
           );

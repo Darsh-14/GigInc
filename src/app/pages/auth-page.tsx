@@ -1,11 +1,12 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { Shield, Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Loader2 } from "lucide-react";
+import logoGig from "../../../assets/LogoGig.jpeg";
 import { mockApi } from "../../services/mockApi";
 import { loadPremiumModel, isPremiumModelReady } from "../../services/mlEngine";
 
@@ -29,7 +30,6 @@ export function AuthPage() {
     e.preventDefault();
     setLoading(true);
 
-    // Try to load pretrained model if not already loaded
     if (!isPremiumModelReady()) {
       await loadPremiumModel();
     }
@@ -54,12 +54,10 @@ export function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-gradient-to-br from-brand-50 to-brand-100 flex items-center justify-center p-6">
       <div className="w-full max-w-md my-8">
-        {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          <Shield className="w-10 h-10 text-blue-600" />
-          <span className="text-3xl font-bold text-blue-900">InsureGig AI</span>
+          <img src={logoGig} alt="InsureGig" className="h-28 md:h-32 w-auto object-contain" />
         </div>
 
         {calculatedPremium === null ? (
@@ -67,7 +65,7 @@ export function AuthPage() {
             <CardHeader>
               <CardTitle>Get Started</CardTitle>
               <CardDescription>
-                Create your account to protect your delivery income
+                Create your account to protect your delivery income with an affordable weekly premium.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -79,6 +77,17 @@ export function AuthPage() {
                     placeholder="Enter your name"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <Input
+                    id="phone"
+                    placeholder="+91XXXXXXXXXX"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     required
                   />
                 </div>
@@ -96,10 +105,7 @@ export function AuthPage() {
 
                 <div className="space-y-2">
                   <Label>Primary Vehicle</Label>
-                  <Select
-                    value={formData.vehicle}
-                    onValueChange={(value) => setFormData({ ...formData, vehicle: value })}
-                  >
+                  <Select value={formData.vehicle} onValueChange={(value) => setFormData({ ...formData, vehicle: value })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select vehicle" />
                     </SelectTrigger>
@@ -142,7 +148,7 @@ export function AuthPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Worker Risk Persona</Label>
+                  <Label>Worker Activity Persona</Label>
                   <Select
                     value={formData.persona}
                     onValueChange={(value) => setFormData({ ...formData, persona: value })}
@@ -152,26 +158,22 @@ export function AuthPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="hustler">The Hustler (Peak/Traffic)</SelectItem>
-                      <SelectItem value="night_owl">The Night Owl (Late/Low Vis)</SelectItem>
+                      <SelectItem value="night_owl">The Night Owl (Late/AQI)</SelectItem>
                       <SelectItem value="fair_weather">The Fair-Weather Rider</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                  disabled={loading}
-                >
+                <Button type="submit" className="w-full bg-brand-500 hover:bg-brand-600" disabled={loading}>
                   {loading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Running AI Model...
+                      Calculating Weekly Premium...
                     </>
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4 mr-2" />
-                      Calculate Dynamic Premium
+                      Calculate Weekly Premium
                     </>
                   )}
                 </Button>
@@ -181,39 +183,41 @@ export function AuthPage() {
         ) : (
           <Card className="border-green-200 bg-gradient-to-br from-green-50 to-emerald-50">
             <CardHeader>
-              <CardTitle className="text-center text-green-800">Your Dynamic AI Premium</CardTitle>
+              <CardTitle className="text-center text-green-800">Your Weekly Premium</CardTitle>
               <CardDescription className="text-center text-green-600">
                 {modelSource === "ml"
-                  ? "Predicted by neural network trained on 45,593 real delivery records"
-                  : "Calculated using actuarial risk model"}
+                  ? "Predicted by neural network trained on real delivery records"
+                  : "Calculated using actuarial fallback: trigger probability x income loss x exposure days"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {modelSource && (
-                <div className={`text-xs text-center px-3 py-1 rounded-full font-medium ${
-                  modelSource === "ml"
-                    ? "bg-blue-100 text-blue-700"
-                    : "bg-amber-100 text-amber-700"
-                }`}>
+                <div
+                  className={`text-xs text-center px-3 py-1 rounded-full font-medium ${
+                    modelSource === "ml" ? "bg-brand-100 text-brand-700" : "bg-amber-100 text-amber-700"
+                  }`}
+                >
                   {modelSource === "ml" ? "ML Model (Real Data)" : "Actuarial Fallback"}
                 </div>
               )}
 
               <div className="bg-white p-6 rounded-lg text-center shadow-sm border border-green-100">
-                <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Daily Premium</span>
-                <div className="text-5xl font-extrabold text-green-600 mt-2">
-                  ₹{calculatedPremium}
-                </div>
-                <p className="text-sm text-gray-500 mt-1">≈ ₹{Math.round(calculatedPremium! * 22)}/month</p>
-                <p className="text-sm text-gray-600 mt-3">
-                  Covers up to ₹{calculatedPremium! * 8} per claim for weather &amp; demand disruptions.
-                </p>
+                <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Weekly Premium</span>
+                <div className="text-5xl font-extrabold text-green-600 mt-2">₹{calculatedPremium}</div>
+                <p className="text-sm text-gray-500 mt-1">Approx. ₹{Math.round(calculatedPremium! * 4)}/month</p>
               </div>
 
-              <Button onClick={confirmAndProceed} className="w-full bg-green-600 hover:bg-green-700 h-12 text-lg font-medium">
+              <Button
+                onClick={confirmAndProceed}
+                className="w-full bg-green-600 hover:bg-green-700 h-12 text-lg font-medium"
+              >
                 Subscribe &amp; Go to Dashboard
               </Button>
-              <Button onClick={() => setCalculatedPremium(null)} variant="outline" className="w-full border-green-200 text-green-700 hover:bg-green-100 bg-white">
+              <Button
+                onClick={() => setCalculatedPremium(null)}
+                variant="outline"
+                className="w-full border-green-200 text-green-700 hover:bg-green-100 bg-white"
+              >
                 Recalculate
               </Button>
             </CardContent>
