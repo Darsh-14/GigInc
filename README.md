@@ -2,6 +2,8 @@
 
 > *trigger-based weekly insurance, Powered by AI*
 
+🚀 **Live Demo:** [https://gig-inc-three.vercel.app](https://gig-inc-three.vercel.app)
+
 ---
 
 ## 📑 Table of Contents
@@ -262,20 +264,37 @@ Unlike traditional insurance, **no claim filing is required**. Payouts are trigg
 
 ## 🗓️ Development Plan
 
-### Phase 1 — Foundation (Hackathon Prototype)
-- [x] UI/UX wireframes tailored to gig workers
-- [x] Front-end mapping and risk dashboard using Geolocation
-- [x] Machine Learning counterfactual calculation (Streamlit + Random Forest)
-- [x] Anti-Fraud Spoofing Engine
+### Phase 1 — Foundation ✅ Complete
+- [x] Landing page with animated hero, feature highlights, and mobile-responsive navigation
+- [x] Auth/signup flow with persona selection (Hustler, Night Owl, Fair-Weather Rider)
+- [x] Dynamic weekly premium calculation using TensorFlow.js ML model (trained on 3,000+ Indian delivery records)
+- [x] Actuarial fallback formula when ML model is unavailable, constrained to ₹20–₹50/week
+- [x] Razorpay payment gate (real + demo mode) before dashboard access
+- [x] Dashboard home with member profile, activity stats, weekly income protection chart, and claims feed
+- [x] Plans page with Normal and Premium tier comparison
+- [x] AI Risk Insights page with live OpenWeatherMap integration and GPS-aware composite risk scoring
+- [x] Parametric claims simulator with four disruption types (weather, AQI, traffic, platform outage)
+- [x] Six-point GPS fraud detection engine (GPS vs IP, platform login, speed anomaly, accuracy fingerprint, frequency, weather mismatch)
+- [x] Disruption history log with aggregate stats and breakdown by type
+- [x] Live GPS map with 17 pre-mapped risk zones across Mumbai, Delhi, Bangalore, Chennai, and Hyderabad
+- [x] Real-time rider location tracking with nearest risk zone detection
+- [x] SMS payout notification via Twilio SMS gateway (Cloudflare Worker / Node server)
+- [x] Admin panel with portfolio metrics, BCR monitoring, and 14-day monsoon stress test
+- [x] Google Colab notebook for ML model training and Streamlit visualizer
+- [x] Deployed to Vercel: [https://gig-inc-three.vercel.app](https://gig-inc-three.vercel.app)
 
 ### Phase 2 — Core Backend Integration
-- [ ] Connect production PostgreSQL Database
+- [ ] Connect production PostgreSQL database for persistent user and claims data
 - [ ] Aadhaar eKYC via DigiLocker API
-- [ ] Implement secure wallet Auto-Debit API (UPI)
+- [ ] Implement secure UPI auto-debit for recurring weekly premiums
+- [ ] Real platform status API polling (Swiggy, Zomato, Amazon) for outage triggers
+- [ ] Production Twilio SMS gateway with delivery receipts
 
 ### Phase 3 — Scale & Compliance
 - [ ] IRDAI Regulatory Sandbox application
-- [ ] Partner directly with a Licensed Insurer to hold risk
+- [ ] Partner with a licensed insurer as risk carrier
+- [ ] Native Android app for offline-capable access
+- [ ] Multi-language support (Tamil, Telugu, Hindi)
 
 ---
 
