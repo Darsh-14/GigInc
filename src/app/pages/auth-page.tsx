@@ -9,6 +9,7 @@ import { Sparkles, Loader2 } from "lucide-react";
 import logoGig from "../../../assets/LogoGig.jpeg";
 import { mockApi } from "../../services/mockApi";
 import { loadPremiumModel, isPremiumModelReady } from "../../services/mlEngine";
+import { PayNowButton } from "../components/ui/PayNowButton";
 
 export function AuthPage() {
   const navigate = useNavigate();
@@ -48,8 +49,13 @@ export function AuthPage() {
     setLoading(false);
   };
 
-  const confirmAndProceed = () => {
-    localStorage.setItem("user", JSON.stringify({ ...formData, premiumPaid: calculatedPremium }));
+  const confirmAndProceed = (paymentId: string) => {
+    localStorage.setItem("user", JSON.stringify({
+      ...formData,
+      premiumPaid: calculatedPremium,
+      premiumStatus: "paid",
+      paymentId,
+    }));
     navigate("/dashboard");
   };
 
@@ -207,12 +213,18 @@ export function AuthPage() {
                 <p className="text-sm text-gray-500 mt-1">Approx. ₹{Math.round(calculatedPremium! * 4)}/month</p>
               </div>
 
-              <Button
-                onClick={confirmAndProceed}
-                className="w-full bg-green-600 hover:bg-green-700 h-12 text-lg font-medium"
-              >
-                Subscribe &amp; Go to Dashboard
-              </Button>
+              <div className="space-y-3">
+                <PayNowButton
+                  premiumAmount={calculatedPremium!}
+                  delivererName={formData.name || "Gig Worker"}
+                  planName="Weekly Protection"
+                  period="week"
+                  onSuccess={confirmAndProceed}
+                />
+                <p className="text-xs text-center text-gray-500">
+                  Complete this demo payment to unlock the dashboard, claims, and policy pages.
+                </p>
+              </div>
               <Button
                 onClick={() => setCalculatedPremium(null)}
                 variant="outline"
