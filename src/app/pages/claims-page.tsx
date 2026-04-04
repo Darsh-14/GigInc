@@ -1,16 +1,14 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { Badge } from "../components/ui/badge";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "../components/ui/button";
-import { CheckCircle, Cloud, Clock, TrendingUp, Wallet, ShieldCheck, Activity, Settings2, History, RefreshCw, Smartphone, Car, Wind, AlertTriangle, MapPin, BrainCircuit } from "lucide-react";
+import { CheckCircle, Cloud, TrendingUp, Wallet, ShieldCheck, Activity, Settings2, History, RefreshCw, Smartphone, Car, Wind, AlertTriangle, MapPin, MessageSquare, X } from "lucide-react";
 import { Slider } from "../components/ui/slider";
 import { Label } from "../components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Progress } from "../components/ui/progress";
 import { mockApi } from "../../services/mockApi";
 import { fetchLiveWeather } from "../../services/weatherApi";
-import { trainInsuranceModel, predictDisruptionLoss, isModelReady } from "../../services/mlEngine";
+import { loadPremiumModel, isPremiumModelReady } from "../../services/mlEngine";
+import { sendPayoutSms } from "../../services/smsApi";
 import { toast } from "sonner";
 
 const spoofLocations = {
@@ -20,27 +18,46 @@ const spoofLocations = {
   "New_York": { lat: 40.7128, lon: -74.0060, name: "New York, USA" }
 };
 
+// Google Pay color tokens
+const GP = {
+  blue: "#009AFD",
+  green: "#34A853",
+  red: "#EA4335",
+  yellow: "#FBBC04",
+  dark: "#202124",
+  mid: "#5F6368",
+  light: "#F8F9FA",
+  border: "#E8EAED",
+};
+
 export function ClaimsPage() {
   const [demoState, setDemoState] = useState<"idle" | "simulating" | "fraud_check" | "fraud_failed" | "calculating" | "done">("idle");
-  
-  const [user, setUser] = useState<any>({ name: "Rider", dailyIncome: 600, premiumPaid: 65, location: "Mumbai", platform: "Swiggy" });
-  
+
+  const [user, setUser] = useState<any>({ name: "Rider", dailyIncome: 600, premiumPaid: 35, location: "Mumbai", platform: "Swiggy" });
+
   const [disruptionType, setDisruptionType] = useState("weather");
-  const [severity, setSeverity] = useState([80]); 
-  const [demandLevel, setDemandLevel] = useState([4]); 
-  
+  const [severity, setSeverity] = useState([80]);
+  const [demandLevel, setDemandLevel] = useState([4]);
+
   const [simulateFraud, setSimulateFraud] = useState(false);
   const [spoofedCity, setSpoofedCity] = useState("New_York");
-  
-  // TensorFlow ML States
-  const [isTrainingMl, setIsTrainingMl] = useState(false);
-  const [trainingProgress, setTrainingProgress] = useState({ epoch: 0, loss: 0 });
-  
+  const [premiumModelReady, setPremiumModelReady] = useState(false);
+
   const [fraudResult, setFraudResult] = useState<any>(null);
   const [claimResult, setClaimResult] = useState<any>(null);
   const [claimHistory, setClaimHistory] = useState<any[]>([]);
   const [showAdmin, setShowAdmin] = useState(false);
   const [isFetchingWeather, setIsFetchingWeather] = useState(false);
+  const [smsPreview, setSmsPreview] = useState<{ phone: string; message: string; ref: string } | null>(null);
+
+  const TRIGGER_THRESHOLDS: Record<string, number> = { weather: 70, aqi: 65, traffic: 75, platform_outage: 55 };
+  const prevTriggerFiredRef = useRef(false);
+
+  const maskPhoneNumber = (phone: string) => {
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length < 2) return "••";
+    return `${"•".repeat(Math.max(0, digits.length - 2))}${digits.slice(-2)}`;
+  };
 
   const clearHistory = () => {
     localStorage.removeItem("claimHistory");
@@ -50,30 +67,22 @@ export function ClaimsPage() {
 
   useEffect(() => {
     const savedUser = localStorage.getItem("user");
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
+    if (savedUser) setUser(JSON.parse(savedUser));
     const history = localStorage.getItem("claimHistory");
-    if (history) {
-      setClaimHistory(JSON.parse(history));
-    }
+    if (history) setClaimHistory(JSON.parse(history));
+    loadPremiumModel().finally(() => setPremiumModelReady(isPremiumModelReady()));
   }, []);
 
   const handleFetchLiveWeather = async () => {
     if (!user?.location) return toast.error("No location set for user profile.");
     setIsFetchingWeather(true);
-
     toast.info(`Fetching live openweathermap data for ${user.location}...`);
-
     try {
       const data = await fetchLiveWeather(user.location);
       if (data.success) {
         setSeverity([data.severity]);
-
-        // Automating the Demand Drop based on Weather Severity
         const autoDemand = Math.max(5, Math.round(100 - (data.severity * 1.2)));
         setDemandLevel([autoDemand]);
-
         toast.success(`Live Weather: ${data.description} (${data.temp}°C). Severity: ${data.severity}%. Platform Capacity dropped to ${autoDemand}%`);
       } else {
         toast.error("Failed to fetch live API. Using mock fallback. " + (data.error || ""));
@@ -85,84 +94,129 @@ export function ClaimsPage() {
     }
   };
 
-  const handleTrainModel = async () => {
-    setIsTrainingMl(true);
-    toast.info("Generating 3,000 synthetic historical claims...");
-    
-    // Pass callback to update Epoch UI live!
-    await trainInsuranceModel((epoch, loss) => {
-      setTrainingProgress({ epoch, loss });
-    });
-    
-    setIsTrainingMl(false);
-    toast.success("Neural Network actively generating predictions.");
+  const buildFlowInput = () => {
+    const savedGps = localStorage.getItem('insuregig_gps_coords');
+    const realGps = savedGps ? JSON.parse(savedGps) : null;
+    const isRealGps = realGps && (Date.now() - realGps.ts < 5 * 60 * 1000);
+    const trueGps = isRealGps ? { lat: realGps.lat, lon: realGps.lon } : { lat: 19.0770, lon: 72.8780 };
+    const ipCoords = { lat: trueGps.lat + 0.018, lon: trueGps.lon + 0.018 };
+    const spoofCoords = simulateFraud ? spoofLocations[spoofedCity as keyof typeof spoofLocations] : trueGps;
+    const movementPath = simulateFraud
+      ? [
+          { lat: trueGps.lat, lon: trueGps.lon },
+          { lat: trueGps.lat + 0.0001, lon: trueGps.lon + 0.0001 },
+          { lat: trueGps.lat + 0.0002, lon: trueGps.lon + 0.0001 },
+          { lat: spoofCoords.lat, lon: spoofCoords.lon },
+        ]
+      : [
+          { lat: trueGps.lat, lon: trueGps.lon },
+          { lat: trueGps.lat + 0.0002, lon: trueGps.lon + 0.0001 },
+          { lat: trueGps.lat + 0.0004, lon: trueGps.lon + 0.0002 },
+          { lat: trueGps.lat + 0.0005, lon: trueGps.lon + 0.0001 },
+        ];
+    return {
+      spoofCoords,
+      payload: {
+        worker: {
+          dailyIncome: user.dailyIncome || 500,
+          premiumPaid: user.premiumPaid || 35,
+          platform: user.platform || "App",
+          policyActive: true,
+        },
+        event: { disruptionType, severity: severity[0] / 100, demandLevel: demandLevel[0] / 100 },
+        gpsCoords: spoofCoords,
+        ipCoords,
+        telemetry: {
+          platformLoginCoords: ipCoords,
+          previousCoords: { lat: trueGps.lat, lon: trueGps.lon },
+          movementPath,
+          minutesSinceLastPing: 10,
+          gpsAccuracyMeters: simulateFraud ? 2 : 25,
+          claimHistoryCount: claimHistory.length,
+          weatherSeverityAtGps: simulateFraud ? Math.min(100, severity[0]) : Math.max(0, severity[0] - 5),
+          weatherSeverityAtIp: simulateFraud ? Math.max(0, severity[0] - 55) : Math.max(0, severity[0] - 8),
+          currentDisruptionSeverity: severity[0],
+        },
+      },
+    };
   };
 
-  const runDemo = () => {
+  const executeParametricFlow = async (options?: { persist?: boolean; sendSms?: boolean; silent?: boolean }) => {
+    const persist = options?.persist ?? false;
+    const shouldSendSms = options?.sendSms ?? false;
+    const silent = options?.silent ?? false;
+
     setDemoState("simulating");
-    setClaimResult(null);
-    setFraudResult(null);
+    const { spoofCoords, payload } = buildFlowInput();
+    const flow = await mockApi.runParametricClaimFlow(payload);
 
-    setTimeout(() => {
-      setDemoState("fraud_check");
+    if (!flow.approved && flow.stage !== "fraud_failed") {
+      setClaimResult(null);
+      setFraudResult(null);
+      setDemoState("idle");
+      if (!silent) toast.error(flow.reason || "Trigger conditions not met.");
+      return;
+    }
 
-      const baseCoords = { lat: 19.0760, lon: 72.8777 }; // Assume IP reflects real base (Mumbai)
-      const spoofCoords = simulateFraud
-        ? spoofLocations[spoofedCity as keyof typeof spoofLocations]
-        : { lat: 19.0770, lon: 72.8780 }; // Normal 0.1km variance for valid claims!
+    if (flow.stage === "fraud_failed") {
+      setClaimResult(null);
+      setFraudResult({ ...(flow.fraud || {}), spoofedDetails: spoofCoords });
+      setDemoState("fraud_failed");
+      if (!silent) toast.error("Fraud checks failed. Payout blocked.");
+      return;
+    }
 
-      const fraud = mockApi.checkFraud(spoofCoords, baseCoords);
-      setFraudResult({ ...fraud, spoofedDetails: spoofCoords });
+    if (!flow.claim) {
+      setDemoState("idle");
+      if (!silent) toast.error("Claim result missing.");
+      return;
+    }
 
-      // Branching logic based on the AI fraud engine output
-      if (!fraud.isValid) {
-        setTimeout(() => setDemoState("fraud_failed"), 2000);
+    setFraudResult({ ...(flow.fraud || {}), spoofedDetails: spoofCoords });
+    setClaimResult(flow.claim);
+    setDemoState("done");
+
+    if (persist) {
+      setClaimHistory((prev) => {
+        const newHistory = [...prev, { ...flow.claim, date: new Date().toISOString() }];
+        localStorage.setItem("claimHistory", JSON.stringify(newHistory));
+        return newHistory;
+      });
+    }
+
+    if (shouldSendSms) {
+      const phone = String(user?.phone || "").trim();
+      const maskedPhone = phone ? maskPhoneNumber(phone) : "";
+      const ref = `INVG-${Date.now().toString().slice(-6)}`;
+      const smsMessage = `InsureGig Alert: Parametric payout of Rs.${flow.claim.payout} has been released for ${flow.claim.disruptionType}. Ref: ${ref}.`;
+      const sendingToast = toast.loading(phone ? `Sending SMS alert to ${maskedPhone}...` : "Sending SMS alert...");
+      if (phone) {
+        const smsResult = await sendPayoutSms(phone, smsMessage);
+        toast.dismiss(sendingToast);
+        if (smsResult.ok) {
+          toast.success(`SMS delivered to ${maskedPhone}`);
+        } else {
+          setSmsPreview({ phone: maskedPhone, message: smsMessage, ref });
+        }
       } else {
-        setTimeout(async () => {
-          setDemoState("calculating");
-          
-          let payoutResult;
-          
-          if (isModelReady()) {
-            // 🧠 USE THE TENSORFLOW NEURAL NETWORK!
-            const lostWagePercentage = await predictDisruptionLoss(severity[0], demandLevel[0]);
-            
-            const baseIncome = user.dailyIncome || 500;
-            const actualIncome = Math.round(baseIncome * (demandLevel[0] / 100));
-            const calculatedLoss = baseIncome - actualIncome;
-            
-            let mlPredictedPayout = Math.round(baseIncome * lostWagePercentage);
-            mlPredictedPayout = Math.max(0, Math.min(mlPredictedPayout, calculatedLoss)); // Bound it logically
-            
-            payoutResult = {
-              disruptionType,
-              expectedIncomeWithoutDisruption: baseIncome,
-              actualIncomeWithDisruption: actualIncome,
-              hoursLost: Math.round((1 - (demandLevel[0]/100)) * 8),
-              payout: mlPredictedPayout,
-              explanation: `[TensorFlow.js AI Prediction] Our in-browser Neural Network processed the ${severity[0]}% severity and ${demandLevel[0]}% platform demand through 50 epochs of historical precedence, predicting a true counterfactual loss of ₹${mlPredictedPayout}.`
-            };
-          } else {
-            // 🔢 USE THE HARDCODED MATH FALLBACK
-            payoutResult = mockApi.processClaim(
-              { dailyIncome: user.dailyIncome || 500, premiumPaid: user.premiumPaid || 45, platform: user.platform || "App" },
-              { disruptionType, severity: severity[0] / 100, demandLevel: demandLevel[0] / 100 }
-            );
-          }
-          
-          setClaimResult(payoutResult);
-
-          setClaimHistory(prev => {
-            const newHistory = [...prev, { ...payoutResult, date: new Date().toISOString() }];
-            localStorage.setItem("claimHistory", JSON.stringify(newHistory));
-            return newHistory;
-          });
-
-          setTimeout(() => setDemoState("done"), 2000);
-        }, 2000);
+        toast.dismiss(sendingToast);
+        setSmsPreview({ phone: "rider's registered number", message: smsMessage, ref });
       }
-    }, 1500);
+    }
   };
+
+  const runDemo = () => executeParametricFlow({ persist: true, sendSms: true, silent: false });
+
+  useEffect(() => {
+    const threshold = TRIGGER_THRESHOLDS[disruptionType] ?? 70;
+    const triggerFires = severity[0] >= threshold;
+    const justCrossed = triggerFires && !prevTriggerFiredRef.current;
+    prevTriggerFiredRef.current = triggerFires;
+    const timer = setTimeout(() => {
+      executeParametricFlow({ persist: justCrossed, sendSms: justCrossed, silent: !justCrossed });
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [disruptionType, severity, demandLevel, simulateFraud, spoofedCity, user]);
 
   const getDisruptionIcon = (type: string, className = "w-5 h-5") => {
     switch (type) {
@@ -172,7 +226,7 @@ export function ClaimsPage() {
       case "aqi": return <Wind className={className} />;
       default: return <Cloud className={className} />;
     }
-  }
+  };
 
   const getDisruptionName = (type: string) => {
     switch (type) {
@@ -182,389 +236,464 @@ export function ClaimsPage() {
       case "aqi": return "AQI Sensor API";
       default: return "Disruption API";
     }
-  }
+  };
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="w-full min-h-full bg-white px-4 py-6 md:min-h-screen md:px-6 lg:px-8 space-y-5">
+
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Claims & Payouts</h1>
-          <p className="text-gray-600">Automatic claim processing and payout details</p>
+          <h1 className="text-2xl font-semibold" style={{ color: GP.dark }}>Claims & Payouts</h1>
+          <p className="text-sm mt-0.5" style={{ color: GP.mid }}>Parametric triggers fire automatically based on live disruption data</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowAdmin(!showAdmin)} className="text-gray-600 border-gray-300">
-            <Settings2 className="w-5 h-5 mr-1" /> Admin Panel
-          </Button>
+          <button
+            onClick={() => setShowAdmin(!showAdmin)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-colors"
+            style={{ borderColor: GP.border, color: GP.mid, background: showAdmin ? GP.light : "white" }}
+          >
+            <Settings2 className="w-4 h-4" /> Control Panel
+          </button>
           {demoState === "idle" && (
-            <Button onClick={runDemo} className="bg-orange-500 hover:bg-orange-600 shadow-md transform transition active:scale-95">
-              <Activity className="w-5 h-5 mr-2" /> Simulate Disruption Event
-            </Button>
+            <button
+              onClick={runDemo}
+              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-full text-sm font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
+              style={{ background: GP.blue }}
+            >
+              <Activity className="w-4 h-4" /> Release Payout
+            </button>
           )}
           {(demoState === "done" || demoState === "fraud_failed") && (
-            <Button onClick={() => setDemoState("idle")} variant="outline" className="border-orange-500 text-orange-600">
-              Reset Demo
-            </Button>
+            <button
+              onClick={() => { setDemoState("idle"); setClaimResult(null); setFraudResult(null); prevTriggerFiredRef.current = false; }}
+              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-full text-sm font-medium border transition-colors"
+              style={{ borderColor: GP.blue, color: GP.blue }}
+            >
+              Reset
+            </button>
           )}
         </div>
       </div>
 
+      {/* ── GPS Spoof Detector card ─────────────────────────────────────── */}
+      <div className="rounded-2xl border p-5" style={{ borderColor: GP.border, background: GP.light }}>
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#E8F0FE" }}>
+            <ShieldCheck className="w-4 h-4" style={{ color: GP.blue }} />
+          </div>
+          <span className="font-semibold text-sm" style={{ color: GP.dark }}>GPS Spoof Detector</span>
+          <span
+            className="text-xs px-2 py-0.5 rounded-full font-medium"
+            style={{ background: premiumModelReady ? "#E6F4EA" : "#F1F3F4", color: premiumModelReady ? GP.green : GP.mid }}
+          >
+            {premiumModelReady ? "Model Active" : "Loading model..."}
+          </span>
+          {(() => {
+            const saved = localStorage.getItem('insuregig_gps_coords');
+            const gps = saved ? JSON.parse(saved) : null;
+            const fresh = gps && (Date.now() - gps.ts < 5 * 60 * 1000);
+            return fresh ? (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1" style={{ background: "#E6F4EA", color: GP.green }}>
+                <MapPin className="w-3 h-3" /> Live GPS
+              </span>
+            ) : (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1" style={{ background: "#F1F3F4", color: GP.mid }}>
+                <MapPin className="w-3 h-3" /> No Live GPS
+              </span>
+            );
+          })()}
+        </div>
+        <p className="text-xs leading-relaxed" style={{ color: GP.mid }}>
+          Active checks: GPS vs IP · GPS vs platform-login · teleport speed · GPS accuracy fingerprint · movement linearity · weather contradiction · claim-history risk
+        </p>
+        {fraudResult && (
+          <div className="mt-3 rounded-xl border p-3 bg-white text-xs" style={{ borderColor: GP.border }}>
+            <span className="font-semibold" style={{ color: GP.dark }}>
+              Latest: {fraudResult.isValid ? "Pass" : "Blocked"} · Risk score {fraudResult.riskScore ?? 0}
+            </span>
+            <span className="ml-3" style={{ color: GP.mid }}>
+              GPS/IP {fraudResult?.checks?.gpsVsIpKm ?? 0} km
+              {fraudResult?.checks?.pathLinearity != null ? ` · Linearity ${fraudResult.checks.pathLinearity}` : ""}
+              {fraudResult?.checks?.weatherSeverityGap != null ? ` · Weather gap ${fraudResult.checks.weatherSeverityGap}` : ""}
+            </span>
+          </div>
+        )}
+        {!fraudResult && (
+          <p className="mt-2 text-xs" style={{ color: GP.mid }}>Auto-monitoring active. Adjust sliders or fetch live weather to refresh.</p>
+        )}
+      </div>
+
+      {/* ── Control Panel ──────────────────────────────────────────────── */}
       {showAdmin && (
-        <Card className="border-orange-300 bg-orange-50/50 shadow-sm animate-in fade-in slide-in-from-top-4">
-          <CardHeader className="pb-3 flex flex-row items-center justify-between">
-            <CardTitle className="text-orange-900 flex items-center gap-2 text-lg">
-              <Settings2 className="w-5 h-5" /> Demo Control Panel
-              <Badge className="bg-orange-100 text-orange-600 hover:bg-orange-200 border-orange-300 ml-2">Hackathon Presenter View</Badge>
-            </CardTitle>
-
-            {/* FRAUD TOGGLE */}
-            <Button
-              size="sm"
+        <div className="rounded-2xl border p-5 space-y-6 animate-in fade-in slide-in-from-top-4" style={{ borderColor: GP.border }}>
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-sm" style={{ color: GP.dark }}>Control Panel</span>
+            <button
               onClick={() => setSimulateFraud(!simulateFraud)}
-              variant={simulateFraud ? "destructive" : "outline"}
-              className={simulateFraud ? "shadow-sm animate-pulse" : "border-orange-300 text-orange-700 bg-white"}
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold border transition-all"
+              style={simulateFraud
+                ? { background: "#FDECEA", color: GP.red, borderColor: "#F5C6C2" }
+                : { background: "white", color: GP.mid, borderColor: GP.border }}
             >
-              <ShieldCheck className="w-4 h-4 mr-1" />
-              {simulateFraud ? "Fraud Simulation Active" : "Test Anti-Fraud Engine"}
-            </Button>
-          </CardHeader>
-          <CardContent className="grid md:grid-cols-2 gap-8">
-          
-            {/* AI TRAINING PANEL */}
-            <div className="md:col-span-2 bg-indigo-50/50 border border-indigo-200 p-5 rounded-xl mt-2 mb-2 shadow-sm animate-in fade-in zoom-in-95">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <Label className="text-indigo-900 font-bold text-xl flex items-center gap-2">
-                     <BrainCircuit className="w-6 h-6 text-indigo-600" />
-                     TensorFlow Neural Engine
-                     {isModelReady() && <Badge className="bg-green-100 text-green-700 hover:bg-green-200 border-none shadow-sm ml-2">Trained & Active</Badge>}
-                  </Label>
-                  <p className="text-sm text-indigo-700 mt-1 font-medium max-w-xl">Train a local Machine Learning model on 3,000 synthetic historical claims to predict precise counterfactual payouts based on historical severity maps.</p>
-                </div>
-                <Button 
-                   onClick={handleTrainModel} 
-                   disabled={isTrainingMl || isModelReady()}
-                   className="bg-indigo-600 hover:bg-indigo-700 text-white min-w-[180px] shadow-md transition-all h-12"
-                >
-                  {isTrainingMl ? `Training... Epoch ${trainingProgress.epoch}` : isModelReady() ? "Model Online - Predicting" : "Initialize & Train AI Model"}
-                </Button>
+              <ShieldCheck className="w-3.5 h-3.5" />
+              {simulateFraud ? "Fraud Simulation ON" : "Test Anti-Fraud"}
+            </button>
+          </div>
+
+          {simulateFraud && (
+            <div className="rounded-xl border p-4" style={{ borderColor: "#F5C6C2", background: "#FDECEA" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <MapPin className="w-4 h-4" style={{ color: GP.red }} />
+                <span className="text-sm font-semibold" style={{ color: GP.red }}>Spoofed GPS Target</span>
               </div>
-              
-              {isTrainingMl && (
-                <div className="mt-5 space-y-2">
-                   <div className="flex justify-between text-xs font-bold text-indigo-800 tracking-wider uppercase">
-                     <span>Epoch {trainingProgress.epoch} of 50</span>
-                     <span>Mean Squared Error: {trainingProgress.loss.toFixed(6)}</span>
-                   </div>
-                   <Progress value={(trainingProgress.epoch / 50) * 100} className="h-2.5 bg-indigo-200 border border-indigo-300 [&>div]:bg-indigo-600" />
-                </div>
-              )}
+              <div className="grid md:grid-cols-2 gap-3 items-start">
+                <Select value={spoofedCity} onValueChange={setSpoofedCity}>
+                  <SelectTrigger className="h-10 rounded-xl text-sm" style={{ borderColor: "#F5C6C2", background: "white" }}>
+                    <SelectValue placeholder="Select city" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Delhi">Delhi, India (1,148 km)</SelectItem>
+                    <SelectItem value="Bangalore">Bangalore, India (845 km)</SelectItem>
+                    <SelectItem value="London">London, UK (7,190 km)</SelectItem>
+                    <SelectItem value="New_York">New York, USA (12,530 km)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs leading-relaxed" style={{ color: GP.red }}>
+                  GPS will transmit from <strong>{spoofLocations[spoofedCity as keyof typeof spoofLocations].name}</strong> while IP traces back to the normal zone.
+                </p>
+              </div>
             </div>
+          )}
 
-            {/* INJECT INTERACTIVE SPOOF TARGET SELECTOR HERE IF ACTIVE! */}
-            {simulateFraud && (
-              <div className="md:col-span-2 bg-red-100/50 border-2 border-dashed border-red-300 p-6 rounded-xl animate-in fade-in slide-in-from-top-2 mb-2">
-                <div className="flex items-center gap-2 mb-4">
-                  <MapPin className="w-5 h-5 text-red-600" />
-                  <Label className="text-red-900 font-bold text-lg">Spoofed GPS Target Selection</Label>
-                </div>
-                <div className="grid md:grid-cols-2 gap-4 items-center">
-                  <Select value={spoofedCity} onValueChange={setSpoofedCity}>
-                    <SelectTrigger className="w-full border-red-300 bg-white text-red-900 h-12 shadow-sm">
-                      <SelectValue placeholder="Select Spoofed City" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Delhi">Delhi, India (1,148 km away)</SelectItem>
-                      <SelectItem value="Bangalore">Bangalore, India (845 km away)</SelectItem>
-                      <SelectItem value="London">London, UK (7,190 km away)</SelectItem>
-                      <SelectItem value="New_York">New York, USA (12,530 km away)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-sm text-red-800 font-medium leading-relaxed bg-white/50 p-3 rounded-lg border border-red-200">
-                    The simulation will force the device GPS to transmit from <strong className="uppercase">{spoofLocations[spoofedCity as keyof typeof spoofLocations].name}</strong>, while the Network IP securely traces back to the normal zone.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <Label className="text-orange-900 font-semibold text-base">Disruption Type</Label>
-              </div>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <Label className="text-xs font-semibold uppercase tracking-wide" style={{ color: GP.mid }}>Disruption Type</Label>
               <Select value={disruptionType} onValueChange={setDisruptionType}>
-                <SelectTrigger className="w-full border-orange-300 bg-white shadow-sm h-12">
+                <SelectTrigger className="h-10 rounded-xl text-sm" style={{ borderColor: GP.border }}>
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="weather">Extreme Weather Event</SelectItem>
-                  <SelectItem value="platform_outage">Delivery App Outage / Server Down</SelectItem>
-                  <SelectItem value="traffic">Traffic Gridlock / Road Closure</SelectItem>
+                  <SelectItem value="platform_outage">Delivery App Outage</SelectItem>
+                  <SelectItem value="traffic">Traffic Gridlock</SelectItem>
                   <SelectItem value="aqi">Hazardous Air Quality</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <Label className="text-orange-900 font-semibold text-base">Severity Score</Label>
-                <div className="flex items-center gap-3">
+                <Label className="text-xs font-semibold uppercase tracking-wide" style={{ color: GP.mid }}>Severity Score</Label>
+                <div className="flex items-center gap-2">
                   {disruptionType === "weather" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
+                    <button
                       onClick={handleFetchLiveWeather}
                       disabled={isFetchingWeather}
-                      className="h-7 text-xs border-orange-300 text-orange-700 hover:bg-orange-100"
+                      className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border disabled:opacity-50"
+                      style={{ borderColor: GP.border, color: GP.blue }}
                     >
-                      <RefreshCw className={`w-3 h-3 mr-1 ${isFetchingWeather ? 'animate-spin' : ''}`} />
+                      <RefreshCw className={`w-3 h-3 ${isFetchingWeather ? "animate-spin" : ""}`} />
                       Live API
-                    </Button>
+                    </button>
                   )}
-                  <span className="font-bold text-lg text-orange-600 w-10 text-right">{severity[0]}%</span>
+                  <span className="text-sm font-bold tabular-nums" style={{ color: GP.blue }}>{severity[0]}%</span>
                 </div>
               </div>
-              <Slider
-                value={severity}
-                onValueChange={setSeverity}
-                max={100}
-                step={1}
-                className="py-6 cursor-pointer"
-              />
+              <Slider value={severity} onValueChange={setSeverity} max={100} step={1} className="py-4 cursor-pointer" />
             </div>
 
-            <div className="space-y-4 md:col-span-2 pt-2 border-t border-orange-200">
+            <div className="md:col-span-2 space-y-3 pt-4" style={{ borderTop: `1px solid ${GP.border}` }}>
               <div className="flex justify-between items-center">
-                <Label className="text-orange-900 font-semibold text-base">Current Delivery Demand Left</Label>
-                <span className="font-bold text-lg text-orange-600">{demandLevel[0]}%</span>
+                <Label className="text-xs font-semibold uppercase tracking-wide" style={{ color: GP.mid }}>Delivery Demand Left</Label>
+                <span className="text-sm font-bold tabular-nums" style={{ color: GP.blue }}>{demandLevel[0]}%</span>
               </div>
-              <Slider
-                value={demandLevel}
-                onValueChange={setDemandLevel}
-                max={100}
-                step={1}
-                className="py-4 cursor-pointer"
-              />
-              <p className="text-xs text-orange-700">Lower capacity = Higher counterfactual payout</p>
+              <Slider value={demandLevel} onValueChange={setDemandLevel} max={100} step={1} className="py-4 cursor-pointer" />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
-      {/* LOADING STATES */}
+      {/* ── Loading state ──────────────────────────────────────────────── */}
       {demoState !== "idle" && demoState !== "done" && demoState !== "fraud_failed" && (
-        <Card className="border-blue-300 bg-blue-50 shadow-md mt-6 animate-pulse">
-          <CardHeader>
-            <CardTitle className="text-blue-900 flex items-center gap-3 text-lg">
-              {demoState === "simulating" && <>{getDisruptionIcon(disruptionType, "animate-bounce w-8 h-8 text-blue-500")} API Polling: Fetching active {disruptionType} + demand metrics for {user.location}...</>}
-
-              {demoState === "fraud_check" && <><ShieldCheck className="animate-spin w-8 h-8 text-indigo-500" /> Fraud Check: Cross-referencing device GPS with Network IP...</>}
-
-              {demoState === "calculating" && <><TrendingUp className="animate-bounce w-8 h-8 text-green-500" /> Evaluator: {fraudResult?.distance}km distance verified. Running risk algorithm for payout...</>}
-            </CardTitle>
-          </CardHeader>
-        </Card>
+        <div className="rounded-2xl border p-5 flex items-center gap-4 animate-pulse" style={{ borderColor: GP.border, background: GP.light }}>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#E8F0FE" }}>
+            {demoState === "simulating" && getDisruptionIcon(disruptionType, "w-5 h-5 animate-bounce")}
+            {demoState === "fraud_check" && <ShieldCheck className="w-5 h-5 animate-spin" style={{ color: GP.blue }} />}
+            {demoState === "calculating" && <TrendingUp className="w-5 h-5 animate-bounce" style={{ color: GP.green }} />}
+          </div>
+          <div>
+            {demoState === "simulating" && (
+              <p className="text-sm font-medium" style={{ color: GP.dark }}>Monitoring {disruptionType} + demand for {user.location}…</p>
+            )}
+            {demoState === "fraud_check" && (
+              <p className="text-sm font-medium" style={{ color: GP.dark }}>Verifying GPS vs IP and platform-login…</p>
+            )}
+            {demoState === "calculating" && (
+              <p className="text-sm font-medium" style={{ color: GP.dark }}>{fraudResult?.distance}km variance confirmed. Calculating payout…</p>
+            )}
+            <p className="text-xs mt-0.5" style={{ color: GP.mid }}>This usually takes a moment</p>
+          </div>
+        </div>
       )}
 
-      {/* FRAUD FAILED UI */}
+      {/* ── Fraud blocked ──────────────────────────────────────────────── */}
       {demoState === "fraud_failed" && fraudResult && (
-        <Card className="border-red-500 bg-red-50 shadow-lg mt-6 animate-in zoom-in-95 duration-300">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-red-900 flex items-center gap-3 text-2xl">
-              <AlertTriangle className="w-8 h-8 text-red-600" />
-              Claim Rejected: Fraud Detected
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <p className="text-red-800 text-lg">
-              Anti-Spoofing engine detected a massive variance between the device's GPS tag and the Network IP origin.
-            </p>
-            <div className="bg-white p-5 rounded-lg border-2 border-red-200 shadow-sm relative overflow-hidden">
-              {/* Watermark */}
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-5 pointer-events-none">
-                <ShieldCheck className="w-64 h-64 text-red-900" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 relative z-10">
-                <div>
-                  <p className="text-sm text-gray-500 uppercase tracking-wide">GPS Location Tag</p>
-                  <p className="font-bold text-gray-900 text-lg flex items-center gap-2 mt-1">
-                    {fraudResult.spoofedDetails.name} <Badge className="bg-red-100 text-red-700 hover:bg-red-200 border-none shadow-sm uppercase tracking-widest text-[10px]">Spoofed</Badge>
-                  </p>
-                  <p className="text-xs text-gray-400 font-mono mt-1">LAT: {fraudResult.spoofedDetails.lat.toFixed(4)} / LON: {fraudResult.spoofedDetails.lon.toFixed(4)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 uppercase tracking-wide">Network IP Origin</p>
-                  <p className="font-bold text-gray-900 text-lg mt-1">Chennai, India</p>
-                  <p className="text-xs text-gray-400 font-mono mt-1">LAT: 19.0760 / LON: 72.8777</p>
-                </div>
-              </div>
-              <div className="mt-6 pt-4 border-t border-red-100 flex items-center justify-between relative z-10">
-                <p className="text-gray-700 font-medium">Calculated Variance Distance:</p>
-                <div className="text-right">
-                  <p className="text-2xl font-extrabold text-red-600 bg-red-100 px-3 py-1 rounded-md">{fraudResult.distance.toLocaleString()} km</p>
-                  <p className="text-[10px] text-red-500 mt-1 font-bold tracking-widest">MAX ALLOWED: 50.0 km</p>
-                </div>
-              </div>
+        <div className="rounded-2xl border p-5 space-y-4 animate-in zoom-in-95 duration-300" style={{ borderColor: "#F5C6C2", background: "#FDECEA" }}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#FCDBD9" }}>
+              <AlertTriangle className="w-5 h-5" style={{ color: GP.red }} />
             </div>
-            <div className="flex p-4 bg-red-900 text-red-50 rounded-lg items-center text-sm font-medium tracking-wide shadow-inner">
-              <ShieldCheck className="w-5 h-5 mr-3 text-red-300" />
-              ACTION: POLICY SUSPENDED PENDING MANUAL REVIEW. PAYOUT BLOCKED.
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* SUCCESS UI */}
-      {demoState === "done" && claimResult && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-500 mt-6">
-          {/* COUNTERFACTUAL - HACKATHON FOCUS */}
-          <div style={{
-            border: '3px solid #1E40AF',
-            padding: '28px',
-            borderRadius: '16px',
-            background: 'linear-gradient(135deg, #1e3a8a 0%, #3B82F6 100%)',
-            color: 'white',
-            boxShadow: '0 10px 25px -5px rgba(30, 64, 175, 0.5)'
-          }}>
-            <h2 className="flex items-center" style={{ margin: '0 0 20px 0', fontSize: '24px' }}>
-              🧠 Counterfactual Evaluation
-              <span className="flex items-center ml-3 bg-white/20 px-3 py-1 rounded-full text-xs font-bold tracking-wider">
-                <Activity className="w-3 h-3 mr-1" /> DYNAMIC AI RESULT
-              </span>
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white/10 p-4 rounded-xl border border-white/20 flex flex-col justify-center">
-                <p className="text-blue-100 text-sm font-medium mb-1 uppercase tracking-wide">Normal Income</p>
-                <div className="text-3xl font-bold text-gray-200 drop-shadow-sm">
-                  ₹{claimResult.expectedIncomeWithoutDisruption}
-                </div>
-                <p className="text-xs text-blue-200 mt-2">Without Disruption <br />(for {claimResult.hoursLost} hours)</p>
-              </div>
-              <div className="bg-white/10 p-4 rounded-xl border border-white/20 flex flex-col justify-center">
-                <p className="text-blue-100 text-sm font-medium mb-1 uppercase tracking-wide">Actual Income</p>
-                <div className="text-3xl font-extrabold text-[#fecaca] drop-shadow-sm">
-                  ₹{claimResult.actualIncomeWithDisruption}
-                </div>
-                <p className="text-xs text-blue-200 mt-2">During Disruption <br />(only {demandLevel[0]}% demand)</p>
-              </div>
-              <div className="bg-white/10 p-4 rounded-xl border border-white/20 relative overflow-hidden flex flex-col justify-center">
-                <div className="absolute top-0 right-0 p-2 opacity-10">
-                  <Wallet className="w-24 h-24" />
-                </div>
-                <p className="text-blue-100 text-sm font-medium mb-1 uppercase tracking-wide">Approved Payout</p>
-                <div className="text-4xl font-extrabold text-[#a7f3d0] drop-shadow-sm">
-                  ₹{claimResult.payout}
-                </div>
-                <p className="text-xs text-green-200 mt-2">Instantly Credited</p>
-              </div>
-            </div>
-            <div className="mt-6 p-4 bg-black/20 rounded-lg border-l-4 border-blue-300">
-              <p className="text-[15px] leading-relaxed text-blue-50 font-medium tracking-wide">
-                {claimResult.explanation} <br /><br />
-                <span className="text-green-300 flex items-center text-sm font-bold">
-                  <ShieldCheck className="w-4 h-4 mr-1" /> Fraud Check: Passed ({Math.round(fraudResult?.distance || 0)}km IP variance)
-                </span>
-              </p>
+            <div>
+              <p className="font-semibold text-sm" style={{ color: GP.dark }}>Claim Rejected — Fraud Detected</p>
+              <p className="text-xs mt-0.5" style={{ color: GP.mid }}>Anti-spoofing engine flagged high risk across location and verification signals</p>
             </div>
           </div>
 
-          {/* Active Claim */}
-          <Card className="border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 shadow-sm border-2">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-green-600 flex items-center justify-center shadow-inner">
-                    <CheckCircle className="w-6 h-6 text-white" />
-                  </div>
-                  Claim Approved
-                </CardTitle>
-                <Badge className="bg-green-600 hover:bg-green-700 text-white text-md px-4 py-1.5 shadow-sm">Completed ✓</Badge>
+          <div className="rounded-xl bg-white p-4 relative overflow-hidden" style={{ border: `1px solid ${GP.border}` }}>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.04] pointer-events-none">
+              <ShieldCheck className="w-48 h-48" style={{ color: GP.red }} />
+            </div>
+            <div className="grid grid-cols-2 gap-4 relative z-10">
+              <div>
+                <p className="text-xs uppercase tracking-wide font-medium" style={{ color: GP.mid }}>GPS Location</p>
+                <p className="font-semibold text-sm mt-1" style={{ color: GP.dark }}>
+                  {fraudResult.spoofedDetails.name}{" "}
+                  <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: "#FDECEA", color: GP.red }}>Spoofed</span>
+                </p>
+                <p className="text-xs mt-1 font-mono" style={{ color: GP.mid }}>
+                  {fraudResult.spoofedDetails.lat.toFixed(4)}, {fraudResult.spoofedDetails.lon.toFixed(4)}
+                </p>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid md:grid-cols-3 gap-4">
-                <div className="p-4 bg-white rounded-xl border border-green-100 shadow-sm transition hover:shadow-md">
-                  <p className="text-sm text-gray-500 mb-1 font-medium">Disruption Trigger</p>
-                  <div className="flex items-center gap-2">
-                    {getDisruptionIcon(claimResult.disruptionType, "w-5 h-5 text-blue-500")}
-                    <p className="font-bold text-gray-900">{getDisruptionName(claimResult.disruptionType)}</p>
-                  </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide font-medium" style={{ color: GP.mid }}>Network IP Origin</p>
+                <p className="font-semibold text-sm mt-1" style={{ color: GP.dark }}>Chennai, India</p>
+                <p className="text-xs mt-1 font-mono" style={{ color: GP.mid }}>19.0760, 72.8777</p>
+              </div>
+            </div>
+            <div className="mt-4 pt-4 flex items-center justify-between relative z-10" style={{ borderTop: `1px solid ${GP.border}` }}>
+              <p className="text-xs font-medium" style={{ color: GP.mid }}>Variance Distance</p>
+              <div className="text-right">
+                <p className="text-xl font-bold tabular-nums" style={{ color: GP.red }}>{fraudResult.distance.toLocaleString()} km</p>
+                <p className="text-xs font-medium mt-0.5" style={{ color: GP.mid }}>Max allowed: 50 km</p>
+              </div>
+            </div>
+          </div>
+
+          {Array.isArray(fraudResult.reasons) && fraudResult.reasons.length > 0 && (
+            <div className="rounded-xl p-4" style={{ background: "#FCDBD9", border: `1px solid #F5C6C2` }}>
+              <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: GP.red }}>
+                Fraud Signals · Risk score {fraudResult.riskScore ?? 0}
+              </p>
+              <ul className="space-y-1">
+                {fraudResult.reasons.map((reason: string, idx: number) => (
+                  <li key={idx} className="text-xs flex items-start gap-1.5" style={{ color: GP.dark }}>
+                    <span className="mt-1 w-1 h-1 rounded-full shrink-0" style={{ background: GP.red }} />
+                    {reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="rounded-xl px-4 py-3 flex items-center gap-2" style={{ background: GP.red }}>
+            <ShieldCheck className="w-4 h-4 text-white shrink-0" />
+            <p className="text-xs font-semibold text-white tracking-wide">POLICY SUSPENDED — PAYOUT BLOCKED — PENDING MANUAL REVIEW</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── SMS Preview modal ──────────────────────────────────────────── */}
+      {smsPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-gray-900 px-5 pt-4 pb-2 flex justify-between items-center">
+              <span className="text-white text-xs font-medium">9:41 AM</span>
+              <div className="w-4 h-2 border border-white/60 rounded-sm relative">
+                <div className="absolute inset-0.5 right-0.5 bg-white/80 rounded-sm" style={{ width: "80%" }} />
+              </div>
+            </div>
+            <div className="bg-gray-900 px-5 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: GP.green }}>
+                  <MessageSquare className="w-5 h-5 text-white" />
                 </div>
-                <div className="p-4 bg-white rounded-xl border border-green-100 shadow-sm transition hover:shadow-md">
-                  <p className="text-sm text-gray-500 mb-1 font-medium">Platform Demand</p>
-                  <p className="text-2xl font-bold text-gray-900">Only {demandLevel[0]}% left</p>
+                <div>
+                  <p className="text-white font-semibold text-sm">InsureGig</p>
+                  <p className="text-gray-400 text-xs">to {smsPreview.phone}</p>
                 </div>
-                <div className="p-4 bg-white rounded-xl border border-green-100 shadow-sm transition hover:shadow-md">
-                  <p className="text-sm text-gray-500 mb-1 font-medium">Auto-Payout</p>
-                  <p className="text-2xl font-bold text-green-600">₹{claimResult.payout}</p>
+                <button onClick={() => setSmsPreview(null)} className="ml-auto text-gray-400 hover:text-white transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="p-5 space-y-4" style={{ background: GP.light }}>
+              <div className="bg-white rounded-2xl rounded-tl-sm p-4 shadow-sm max-w-xs">
+                <p className="text-sm leading-relaxed" style={{ color: GP.dark }}>{smsPreview.message}</p>
+                <p className="text-xs mt-2 text-right" style={{ color: GP.mid }}>Delivered</p>
+              </div>
+              <div className="rounded-xl p-3 flex items-start gap-2" style={{ background: "#E6F4EA", border: `1px solid #A8D5B5` }}>
+                <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: GP.green }} />
+                <p className="text-xs leading-relaxed" style={{ color: GP.dark }}>
+                  This SMS would be delivered to the rider's phone instantly upon payout approval in production.
+                  <span className="font-semibold block mt-1">Ref: {smsPreview.ref}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setSmsPreview(null)}
+                className="w-full py-2.5 rounded-full text-sm font-semibold text-white"
+                style={{ background: GP.dark }}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Success result ─────────────────────────────────────────────── */}
+      {demoState === "done" && claimResult && (
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-6 duration-500">
+
+          {/* Counterfactual */}
+          <div className="rounded-2xl p-5 space-y-4" style={{ background: GP.blue }}>
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-white text-sm">Counterfactual Evaluation</p>
+              <span className="text-xs px-3 py-1 rounded-full font-semibold flex items-center gap-1 bg-white/20 text-white">
+                <Activity className="w-3 h-3" /> AI Result
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: "Normal Income", value: `₹${claimResult.expectedIncomeWithoutDisruption}`, sub: `Without disruption · ${claimResult.hoursLost}h`, dim: true },
+                { label: "Actual Income", value: `₹${claimResult.actualIncomeWithDisruption}`, sub: `Only ${demandLevel[0]}% demand`, dim: true },
+                { label: "Approved Payout", value: `₹${claimResult.payout}`, sub: "Instantly credited", dim: false },
+              ].map((item) => (
+                <div key={item.label} className="rounded-xl p-3 flex flex-col gap-1" style={{ background: "rgba(255,255,255,0.12)" }}>
+                  <p className="text-xs text-brand-100 font-medium">{item.label}</p>
+                  <p className={`text-2xl font-bold ${item.dim ? "text-brand-100" : "text-white"}`}>{item.value}</p>
+                  <p className="text-xs text-brand-200">{item.sub}</p>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-xl p-3 text-xs leading-relaxed text-brand-50" style={{ background: "rgba(0,0,0,0.15)" }}>
+              {claimResult.explanation}
+              <span className="flex items-center gap-1 mt-2 font-semibold text-green-300">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Fraud Check Passed · {Math.round(fraudResult?.distance || 0)}km IP variance · Risk score {fraudResult?.riskScore ?? 0}
+              </span>
+            </div>
+          </div>
+
+          {/* Claim card */}
+          <div className="rounded-2xl border p-5 space-y-4" style={{ borderColor: "#A8D5B5", background: "#F6FEF8" }}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: GP.green }}>
+                  <CheckCircle className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm" style={{ color: GP.dark }}>Claim Approved</p>
+                  <p className="text-xs" style={{ color: GP.mid }}>Parametric trigger confirmed</p>
                 </div>
               </div>
+              <span className="text-xs px-3 py-1 rounded-full font-semibold" style={{ background: "#E6F4EA", color: GP.green }}>
+                Completed
+              </span>
+            </div>
 
-              <div className="flex gap-3 pt-2">
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button className="flex-1 bg-green-600 hover:bg-green-700 shadow-sm h-11">
-                      <Wallet className="w-4 h-4 mr-2" />
-                      View Wallet
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center justify-between text-xl w-full pr-6">
-                        <div className="flex items-center gap-2">
-                          <Wallet className="w-5 h-5 text-green-600" /> Wallet History
-                        </div>
-                        <Button variant="ghost" size="sm" onClick={clearHistory} className="h-8 px-2 text-gray-400 hover:text-red-600 hover:bg-red-50">
-                          Clear demo
-                        </Button>
-                      </DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div className="bg-green-50 border border-green-200 p-4 rounded-lg flex justify-between items-center text-green-900">
-                        <span className="font-medium">Total Lifetime Payouts</span>
-                        <span className="text-2xl font-bold text-green-600">
-                          ₹{claimHistory.reduce((sum, claim) => sum + claim.payout, 0)}
-                        </span>
-                      </div>
-
-                      <h4 className="font-medium text-sm text-gray-500 uppercase tracking-wide flex items-center gap-2 mt-4 mb-2">
-                        <History className="w-4 h-4" /> Recent Claims
-                      </h4>
-                      <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
-                        {claimHistory.length === 0 ? (
-                          <p className="text-gray-500 text-center py-4 text-sm">No payouts yet.</p>
-                        ) : (
-                          [...claimHistory].reverse().map((claim, idx) => (
-                            <div key={idx} className="bg-white border p-3 rounded-lg shadow-sm flex justify-between items-center">
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  {getDisruptionIcon(claim.disruptionType, "w-4 h-4 text-gray-500")}
-                                  <p className="font-semibold text-gray-900 capitalize">{(claim.disruptionType || 'weather').replace('_', ' ')}</p>
-                                </div>
-                                <p className="text-xs text-gray-500 mt-1">{new Date(claim.date).toLocaleDateString()} • {claim.hoursLost}hrs Impact</p>
-                              </div>
-                              <div className="text-right flex flex-col items-end">
-                                <p className="font-bold text-green-600">+ ₹{claim.payout}</p>
-                                <Badge variant="outline" className="text-[10px] mt-1 bg-green-50 text-green-700 border-green-200 py-0 px-2 h-5">Auto-Approved</Badge>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
+            <div className="grid md:grid-cols-3 gap-3">
+              {[
+                {
+                  label: "Disruption Trigger",
+                  content: (
+                    <div className="flex items-center gap-2 mt-1">
+                      {getDisruptionIcon(claimResult.disruptionType, "w-4 h-4")}
+                      <span className="text-sm font-semibold" style={{ color: GP.dark }}>{getDisruptionName(claimResult.disruptionType)}</span>
                     </div>
-                  </DialogContent>
-                </Dialog>
+                  )
+                },
+                {
+                  label: "Platform Demand",
+                  content: <p className="text-xl font-bold mt-1" style={{ color: GP.dark }}>Only {demandLevel[0]}% left</p>
+                },
+                {
+                  label: "Auto-Payout",
+                  content: <p className="text-xl font-bold mt-1" style={{ color: GP.green }}>₹{claimResult.payout}</p>
+                },
+              ].map((item) => (
+                <div key={item.label} className="rounded-xl p-3 bg-white" style={{ border: `1px solid ${GP.border}` }}>
+                  <p className="text-xs font-medium" style={{ color: GP.mid }}>{item.label}</p>
+                  {item.content}
+                </div>
+              ))}
+            </div>
 
-                <Button
-                  onClick={() => toast.info("Receipt downloaded: INVG-CLAIM-" + Math.floor(Math.random() * 10000) + ".pdf")}
-                  variant="outline"
-                  className="flex-1 border-green-200 text-green-700 hover:bg-green-50 h-11"
-                >
-                  Download Receipt
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+            <div className="flex gap-3">
+              <Dialog>
+                <DialogTrigger asChild>
+                  <button
+                    className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-full text-sm font-semibold text-white"
+                    style={{ background: GP.green }}
+                  >
+                    <Wallet className="w-4 h-4" /> View Wallet
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md rounded-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center justify-between text-base w-full pr-6">
+                      <div className="flex items-center gap-2">
+                        <Wallet className="w-4 h-4" style={{ color: GP.green }} /> Wallet History
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={clearHistory} className="h-7 px-2 text-xs text-gray-400 hover:text-red-600">
+                        Clear demo
+                      </Button>
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    <div className="rounded-xl p-4 flex justify-between items-center" style={{ background: "#E6F4EA" }}>
+                      <span className="text-sm font-medium" style={{ color: GP.dark }}>Total Lifetime Payouts</span>
+                      <span className="text-xl font-bold" style={{ color: GP.green }}>
+                        ₹{claimHistory.reduce((sum, claim) => sum + claim.payout, 0)}
+                      </span>
+                    </div>
+                    <p className="text-xs uppercase tracking-wide font-medium flex items-center gap-1.5 mt-3" style={{ color: GP.mid }}>
+                      <History className="w-3.5 h-3.5" /> Recent Claims
+                    </p>
+                    <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
+                      {claimHistory.length === 0 ? (
+                        <p className="text-sm text-center py-6" style={{ color: GP.mid }}>No payouts yet.</p>
+                      ) : (
+                        [...claimHistory].reverse().map((claim, idx) => (
+                          <div key={idx} className="rounded-xl p-3 bg-white flex justify-between items-center" style={{ border: `1px solid ${GP.border}` }}>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                {getDisruptionIcon(claim.disruptionType, "w-3.5 h-3.5")}
+                                <p className="text-sm font-semibold capitalize" style={{ color: GP.dark }}>{(claim.disruptionType || 'weather').replace('_', ' ')}</p>
+                              </div>
+                              <p className="text-xs mt-0.5" style={{ color: GP.mid }}>{new Date(claim.date).toLocaleDateString()} · {claim.hoursLost}h impact</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-bold" style={{ color: GP.green }}>+₹{claim.payout}</p>
+                              <span className="text-xs px-2 py-0.5 rounded-full mt-0.5 inline-block" style={{ background: "#E6F4EA", color: GP.green }}>Auto-Approved</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              <button
+                onClick={() => toast.info("Receipt downloaded: INVG-CLAIM-" + Math.floor(Math.random() * 10000) + ".pdf")}
+                className="flex-1 inline-flex items-center justify-center py-2.5 rounded-full text-sm font-semibold border transition-colors hover:bg-gray-50"
+                style={{ borderColor: GP.border, color: GP.dark }}
+              >
+                Download Receipt
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

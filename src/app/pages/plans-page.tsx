@@ -5,11 +5,14 @@ import { Badge } from "../components/ui/badge";
 import { Check, Star, Shield, Sparkles, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "motion/react";
+import { PayNowButton } from "../components/ui/PayNowButton";
 
 export function PlansPage() {
   const [selectedPlan, setSelectedPlan] = useState<"normal" | "premium">("premium");
+  const [purchasedPlan, setPurchasedPlan] = useState<"normal" | "premium" | null>(null);
 
   const handleSelectPlan = (plan: "normal" | "premium") => {
+    if (purchasedPlan) return;
     setSelectedPlan(plan);
     toast.success(`${plan === "normal" ? "Normal" : "Premium"} plan selected!`);
   };
@@ -18,7 +21,7 @@ export function PlansPage() {
     <div className="p-6 space-y-6 relative overflow-hidden">
       {/* Animated Background */}
       <motion.div
-        className="absolute top-0 right-0 w-96 h-96 bg-blue-400/10 rounded-full blur-3xl pointer-events-none"
+        className="absolute top-0 right-0 w-96 h-96 bg-brand-400/10 rounded-full blur-3xl pointer-events-none"
         animate={{
           y: [0, 50, 0],
           x: [0, 30, 0],
@@ -61,9 +64,9 @@ export function PlansPage() {
         transition={{ duration: 0.6, delay: 0.2 }}
         whileHover={{ scale: 1.02 }}
       >
-        <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 relative overflow-hidden">
+        <Card className="border-brand-200 bg-gradient-to-br from-brand-50 to-white relative overflow-hidden">
           <motion.div
-            className="absolute inset-0 bg-gradient-to-r from-blue-400/10 to-transparent"
+            className="absolute inset-0 bg-gradient-to-r from-brand-400/10 to-transparent"
             animate={{ x: ["-100%", "100%"] }}
             transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
           />
@@ -74,22 +77,26 @@ export function PlansPage() {
                   animate={{ rotate: 360 }}
                   transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
                 >
-                  <Shield className="w-10 h-10 text-blue-600" />
+                  <Shield className="w-10 h-10 text-brand-500" />
                 </motion.div>
                 <div>
-                  <p className="text-sm text-blue-900 font-medium">Current Plan</p>
-                  <p className="text-2xl font-bold text-blue-900 flex items-center gap-2">
-                    Premium Plan
-                    <motion.div
-                      animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.2, 1] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                    >
-                      <Star className="w-6 h-6 text-yellow-500 fill-yellow-500" />
-                    </motion.div>
+                  <p className="text-sm text-brand-900 font-medium">Current Plan</p>
+                  <p className="text-2xl font-bold text-brand-900 flex items-center gap-2">
+                    {selectedPlan === "normal" ? "Normal Plan" : "Premium Plan"}
+                    {selectedPlan === "premium" && (
+                      <motion.div
+                        animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.2, 1] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                      >
+                        <Star className="w-6 h-6 text-yellow-500 fill-yellow-500" />
+                      </motion.div>
+                    )}
                   </p>
                 </div>
               </div>
-              <Badge className="bg-green-600">Active</Badge>
+              <Badge className={purchasedPlan ? "bg-green-600 px-3 py-1 shadow-md shadow-green-200" : "bg-brand-500 shadow-md shadow-brand-200"}>
+                {purchasedPlan ? "✅ Active Policy (Locked)" : "Pending Payment"}
+              </Badge>
             </div>
           </CardContent>
         </Card>
@@ -105,9 +112,9 @@ export function PlansPage() {
           whileHover={{ y: -15, rotateY: 5, scale: 1.03 }}
           style={{ transformStyle: "preserve-3d" }}
         >
-          <Card className={`relative overflow-hidden h-full ${selectedPlan === "normal" ? "border-blue-500 border-2" : ""}`}>
+          <Card className={`relative overflow-hidden h-full ${selectedPlan === "normal" ? "border-brand-500 border-2" : ""}`}>
             <motion.div
-              className="absolute top-0 right-0 w-40 h-40 bg-blue-400/20 rounded-full blur-2xl"
+              className="absolute top-0 right-0 w-40 h-40 bg-brand-400/20 rounded-full blur-2xl"
               animate={{
                 scale: [1, 1.3, 1],
                 opacity: [0.3, 0.5, 0.3]
@@ -123,7 +130,7 @@ export function PlansPage() {
                 className="flex items-center gap-2 mb-2"
                 whileHover={{ x: 10 }}
               >
-                <Shield className="w-6 h-6 text-blue-600" />
+                <Shield className="w-6 h-6 text-brand-500" />
                 <CardTitle className="text-2xl">Normal Plan</CardTitle>
               </motion.div>
               <CardDescription>Basic protection for delivery workers</CardDescription>
@@ -159,14 +166,26 @@ export function PlansPage() {
                   </motion.div>
                 ))}
               </div>
-              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Button
-                  className="w-full"
-                  variant={selectedPlan === "normal" ? "default" : "outline"}
-                  onClick={() => handleSelectPlan("normal")}
-                >
-                  {selectedPlan === "normal" ? "Current Plan" : "Select Plan"}
-                </Button>
+              <motion.div whileHover={purchasedPlan ? {} : { scale: 1.05 }} whileTap={purchasedPlan ? {} : { scale: 0.95 }}>
+                {purchasedPlan === "normal" ? (
+                  <div className="flex items-center justify-center gap-2 bg-green-50 border border-green-200 text-green-700 px-6 py-3 rounded-xl font-semibold">
+                    ✅ Policy Active
+                  </div>
+                ) : purchasedPlan ? (
+                  <Button disabled className="w-full bg-gray-200 text-gray-500 shadow-none border-0">Plan Unavailable</Button>
+                ) : (
+                  <div onClick={() => handleSelectPlan("normal")}>
+                    <PayNowButton
+                      premiumAmount={25}
+                      planName="Normal"
+                      period="week"
+                      onSuccess={() => {
+                        setPurchasedPlan("normal");
+                        setSelectedPlan("normal");
+                      }}
+                    />
+                  </div>
+                )}
               </motion.div>
             </CardContent>
           </Card>
@@ -180,7 +199,7 @@ export function PlansPage() {
           whileHover={{ y: -15, rotateY: -5, scale: 1.03 }}
           style={{ transformStyle: "preserve-3d" }}
         >
-          <Card className={`relative overflow-hidden h-full ${selectedPlan === "premium" ? "border-blue-500 border-2" : ""} bg-gradient-to-br from-white to-blue-50`}>
+          <Card className={`relative overflow-hidden h-full ${selectedPlan === "premium" ? "border-brand-500 border-2" : ""} bg-gradient-to-br from-white to-brand-50`}>
             {/* Animated Badge */}
             <motion.div
               className="absolute top-4 right-4 z-20"
@@ -215,7 +234,7 @@ export function PlansPage() {
             />
 
             <motion.div
-              className="absolute bottom-0 left-0 w-32 h-32 bg-blue-400/20 rounded-full blur-2xl"
+              className="absolute bottom-0 left-0 w-32 h-32 bg-brand-400/20 rounded-full blur-2xl"
               animate={{
                 scale: [1, 1.3, 1],
                 opacity: [0.3, 0.5, 0.3]
@@ -280,13 +299,26 @@ export function PlansPage() {
                   </motion.div>
                 ))}
               </div>
-              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Button
-                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                  onClick={() => handleSelectPlan("premium")}
-                >
-                  {selectedPlan === "premium" ? "Current Plan" : "Upgrade to Premium"}
-                </Button>
+              <motion.div whileHover={purchasedPlan ? {} : { scale: 1.05 }} whileTap={purchasedPlan ? {} : { scale: 0.95 }}>
+                {purchasedPlan === "premium" ? (
+                  <div className="flex items-center justify-center gap-2 bg-green-50 border border-green-200 text-green-700 px-6 py-3 rounded-xl font-semibold">
+                    ✅ Policy Active
+                  </div>
+                ) : purchasedPlan ? (
+                  <Button disabled className="w-full bg-gray-200 text-gray-500 shadow-none border-0">Plan Unavailable</Button>
+                ) : (
+                  <div onClick={() => handleSelectPlan("premium")}>
+                    <PayNowButton
+                      premiumAmount={50}
+                      planName="Premium"
+                      period="week"
+                      onSuccess={() => {
+                        setPurchasedPlan("premium");
+                        setSelectedPlan("premium");
+                      }}
+                    />
+                  </div>
+                )}
               </motion.div>
             </CardContent>
           </Card>
@@ -301,7 +333,7 @@ export function PlansPage() {
       >
         <Card className="relative overflow-hidden">
           <motion.div
-            className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600"
+            className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-brand-500 via-brand-400 to-brand-500"
             animate={{ x: ["-100%", "100%"] }}
             transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
           />

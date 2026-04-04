@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
-import { Shield, Zap, TrendingUp, Clock, CloudRain, Wind, DollarSign, Award, Menu, X, Users } from "lucide-react";
+import { Zap, TrendingUp, Clock, CloudRain, Wind, DollarSign, Award, Menu, X, Users } from "lucide-react";
+import logoGig from "../../../assets/LogoGig.jpeg";
 import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useState } from "react";
 
@@ -23,10 +24,10 @@ export function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-100 overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-brand-50 via-white to-brand-100 overflow-hidden">
       {/* Floating Background Elements */}
       <motion.div
-        className="absolute top-20 left-10 w-32 h-32 bg-blue-400/20 rounded-full blur-3xl"
+        className="absolute top-20 left-10 w-32 h-32 bg-brand-400/20 rounded-full blur-3xl"
         animate={{
           y: [0, 50, 0],
           x: [0, 30, 0],
@@ -38,7 +39,7 @@ export function LandingPage() {
         }}
       />
       <motion.div
-        className="absolute bottom-20 right-20 w-40 h-40 bg-indigo-400/20 rounded-full blur-3xl"
+        className="absolute bottom-20 right-20 w-40 h-40 bg-brand-300/20 rounded-full blur-3xl"
         animate={{
           y: [0, -40, 0],
           x: [0, -30, 0],
@@ -63,21 +64,20 @@ export function LandingPage() {
             whileHover={{ scale: 1.05 }}
             transition={{ type: "spring", stiffness: 400 }}
           >
-            <Shield className="w-8 h-8 text-blue-600" />
-            <span className="text-2xl font-bold text-blue-900">InsureGig</span>
+            <img src={logoGig} alt="InsureGig" className="h-24 md:h-28 w-auto object-contain" />
           </motion.div>
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-6">
-            <a href="#features" className="text-gray-600 hover:text-blue-600 transition-colors">Features</a>
-            <a href="#how-it-works" className="text-gray-600 hover:text-blue-600 transition-colors">How it Works</a>
-            <a href="#pricing" className="text-gray-600 hover:text-blue-600 transition-colors">Pricing</a>
+            <a href="#features" className="text-gray-600 hover:text-brand-500 transition-colors">Features</a>
+            <a href="#how-it-works" className="text-gray-600 hover:text-brand-500 transition-colors">How it Works</a>
+            <a href="#pricing" className="text-gray-600 hover:text-brand-500 transition-colors">Pricing</a>
             <Button variant="outline" onClick={() => navigate("/auth")}>Login</Button>
           </div>
 
           {/* Mobile Hamburger */}
           <button
-            className="md:hidden p-2 rounded-lg text-gray-700 hover:bg-blue-50 transition-colors"
+            className="md:hidden p-2 rounded-lg text-gray-700 hover:bg-brand-50 transition-colors"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle menu"
           >
@@ -99,26 +99,26 @@ export function LandingPage() {
                 <a
                   href="#features"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="px-4 py-3 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors font-medium"
+                  className="px-4 py-3 rounded-lg text-gray-700 hover:bg-brand-50 hover:text-brand-500 transition-colors font-medium"
                 >
                   Features
                 </a>
                 <a
                   href="#how-it-works"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="px-4 py-3 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors font-medium"
+                  className="px-4 py-3 rounded-lg text-gray-700 hover:bg-brand-50 hover:text-brand-500 transition-colors font-medium"
                 >
                   How it Works
                 </a>
                 <a
                   href="#pricing"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="px-4 py-3 rounded-lg text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors font-medium"
+                  className="px-4 py-3 rounded-lg text-gray-700 hover:bg-brand-50 hover:text-brand-500 transition-colors font-medium"
                 >
                   Pricing
                 </a>
                 <div className="px-4 pt-2">
-                  <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => { setMobileMenuOpen(false); navigate("/auth"); }}>
+                  <Button className="w-full bg-brand-500 hover:bg-brand-600" onClick={() => { setMobileMenuOpen(false); navigate("/auth"); }}>
                     Login
                   </Button>
                 </div>
@@ -137,7 +137,7 @@ export function LandingPage() {
             transition={{ duration: 0.8, delay: 0.2 }}
           >
             <motion.h1
-              className="text-5xl font-bold text-blue-900 mb-6"
+              className="text-5xl font-bold text-brand-900 mb-6"
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.6, delay: 0.4 }}
@@ -167,7 +167,7 @@ export function LandingPage() {
               transition={{ duration: 0.6, delay: 1 }}
             >
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Button size="lg" onClick={() => navigate("/auth")} className="bg-blue-600 hover:bg-blue-700">
+                <Button size="lg" onClick={() => navigate("/auth")} className="bg-brand-500 hover:bg-brand-600">
                   Get Started
                 </Button>
               </motion.div>
@@ -220,9 +220,9 @@ export function LandingPage() {
                 whileHover={{ scale: 1.1, rotate: 5 }}
               >
                 <div className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-blue-600" />
+                  <Users className="w-5 h-5 text-brand-500" />
                   <div>
-                    <div className="text-2xl font-bold text-blue-900">10K+</div>
+                    <div className="text-2xl font-bold text-brand-900">10K+</div>
                     <div className="text-xs text-gray-600">Active Users</div>
                   </div>
                 </div>
@@ -339,10 +339,10 @@ export function LandingPage() {
       </section>
 
       {/* How It Works */}
-      <section id="how-it-works" className="py-16 bg-gradient-to-br from-blue-50 to-indigo-100 relative overflow-hidden">
+      <section id="how-it-works" className="py-16 bg-gradient-to-br from-brand-50 to-brand-100 relative overflow-hidden">
         {/* Animated Background Pattern */}
         <motion.div
-          className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600"
+          className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-brand-500 via-brand-400 to-brand-500"
           animate={{ x: ["-100%", "100%"] }}
           transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
         />
@@ -409,8 +409,8 @@ export function LandingPage() {
                   }}
                   transition={{ type: "spring", stiffness: 260, damping: 20 }}
                   style={{
-                    background: step.color === "blue" ? "#2563eb" :
-                               step.color === "indigo" ? "#4f46e5" :
+                    background: step.color === "blue" ? "#009AFD" :
+                               step.color === "indigo" ? "#0087E0" :
                                step.color === "purple" ? "#7c3aed" : "#10b981"
                   }}
                 >
@@ -422,7 +422,7 @@ export function LandingPage() {
                 {/* Connecting Line */}
                 {step.num < 4 && (
                   <motion.div
-                    className="hidden md:block absolute top-10 left-[60%] w-[80%] h-0.5 bg-gradient-to-r from-blue-300 to-transparent"
+                    className="hidden md:block absolute top-10 left-[60%] w-[80%] h-0.5 bg-gradient-to-r from-brand-300 to-transparent"
                     initial={{ scaleX: 0 }}
                     whileInView={{ scaleX: 1 }}
                     transition={{ duration: 0.8, delay: step.delay + 0.3 }}
@@ -504,7 +504,7 @@ export function LandingPage() {
                     whileHover={{ scale: 1.2, rotate: 360 }}
                     transition={{ type: "spring", stiffness: 260, damping: 20 }}
                   >
-                    <feature.icon className={`w-12 h-12 text-${feature.color}-600 mb-4 relative z-10`} style={{ color: feature.color === "blue" ? "#2563eb" : "#10b981" }} />
+                    <feature.icon className={`w-12 h-12 text-${feature.color}-600 mb-4 relative z-10`} style={{ color: feature.color === "blue" ? "#009AFD" : "#10b981" }} />
                   </motion.div>
                   <h3 className="text-xl font-semibold mb-2 relative z-10">{feature.title}</h3>
                   <p className="text-gray-600 relative z-10">
@@ -515,7 +515,7 @@ export function LandingPage() {
                   <motion.div
                     className={`absolute -bottom-6 -right-6 w-24 h-24 rounded-full blur-2xl`}
                     style={{
-                      background: feature.color === "blue" ? "rgba(37, 99, 235, 0.3)" : "rgba(16, 185, 129, 0.3)"
+                      background: feature.color === "blue" ? "rgba(0, 154, 253, 0.3)" : "rgba(16, 185, 129, 0.3)"
                     }}
                     animate={{
                       scale: [1, 1.2, 1],
@@ -535,7 +535,7 @@ export function LandingPage() {
       </section>
 
       {/* Testimonials Slider */}
-      <section className="py-16 bg-gradient-to-br from-indigo-50 to-blue-50">
+      <section className="py-16 bg-gradient-to-br from-brand-50 to-white">
         <div className="max-w-7xl mx-auto px-6">
           <motion.h2
             className="text-3xl font-bold text-center text-gray-900 mb-12"
@@ -585,7 +585,7 @@ export function LandingPage() {
                 <div className="bg-white rounded-2xl p-6 shadow-lg h-full">
                   <div className="flex items-center gap-4 mb-4">
                     <motion.div
-                      className="w-16 h-16 rounded-full overflow-hidden border-4 border-blue-600"
+                      className="w-16 h-16 rounded-full overflow-hidden border-4 border-brand-500"
                       whileHover={{ scale: 1.2, rotate: 360 }}
                       transition={{ type: "spring", stiffness: 300 }}
                     >
@@ -618,7 +618,7 @@ export function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-16 bg-gradient-to-r from-blue-600 to-indigo-700 text-white relative overflow-hidden">
+      <section className="py-16 bg-gradient-to-r from-brand-500 to-brand-700 text-white relative overflow-hidden">
         {/* Animated Background Circles */}
         <motion.div
           className="absolute top-10 right-20 w-64 h-64 bg-white/10 rounded-full blur-3xl"
@@ -680,7 +680,7 @@ export function LandingPage() {
               >
                 10K+
               </motion.div>
-              <div className="text-sm text-blue-100">Active Users</div>
+              <div className="text-sm text-brand-100">Active Users</div>
             </div>
             <div className="text-center">
               <motion.div
@@ -690,7 +690,7 @@ export function LandingPage() {
               >
                 ₹2.5Cr
               </motion.div>
-              <div className="text-sm text-blue-100">Paid Out</div>
+              <div className="text-sm text-brand-100">Paid Out</div>
             </div>
             <div className="text-center">
               <motion.div
@@ -700,7 +700,7 @@ export function LandingPage() {
               >
                 98%
               </motion.div>
-              <div className="text-sm text-blue-100">Satisfaction</div>
+              <div className="text-sm text-brand-100">Satisfaction</div>
             </div>
           </motion.div>
 
@@ -712,7 +712,7 @@ export function LandingPage() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
-            <Button size="lg" onClick={() => navigate("/auth")} className="bg-white text-blue-600 hover:bg-gray-100 text-lg px-8 py-6">
+            <Button size="lg" onClick={() => navigate("/auth")} className="bg-white text-brand-500 hover:bg-gray-100 text-lg px-8 py-6">
               Get Started Now
             </Button>
           </motion.div>

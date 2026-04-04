@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "sms:server": "node sms-gateway/server.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

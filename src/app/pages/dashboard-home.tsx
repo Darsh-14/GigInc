@@ -19,7 +19,7 @@ export function DashboardHome() {
     <div className="p-6 space-y-6 relative">
       {/* Floating Background */}
       <motion.div
-        className="absolute top-10 right-10 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none"
+        className="absolute top-10 right-10 w-64 h-64 bg-brand-400/10 rounded-full blur-3xl pointer-events-none"
         animate={{
           y: [0, 40, 0],
           x: [0, 20, 0],
@@ -52,7 +52,7 @@ export function DashboardHome() {
         >
           <Card className="relative overflow-hidden">
             <motion.div
-              className="absolute top-0 right-0 w-32 h-32 bg-blue-400/20 rounded-full blur-2xl"
+              className="absolute top-0 right-0 w-32 h-32 bg-brand-400/20 rounded-full blur-2xl"
               animate={{
                 scale: [1, 1.3, 1],
                 opacity: [0.3, 0.5, 0.3]
@@ -71,7 +71,7 @@ export function DashboardHome() {
                 whileHover={{ rotate: 360, scale: 1.2 }}
                 transition={{ type: "spring", stiffness: 260, damping: 20 }}
               >
-                <Shield className="w-5 h-5 text-blue-600" />
+                <Shield className="w-5 h-5 text-brand-500" />
               </motion.div>
             </CardHeader>
             <CardContent>
@@ -187,7 +187,7 @@ export function DashboardHome() {
       >
         <Card className="relative overflow-hidden">
           <motion.div
-            className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600"
+            className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-brand-500 via-brand-400 to-brand-500"
             animate={{ x: ["-100%", "100%"] }}
             transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
           />
@@ -212,7 +212,7 @@ export function DashboardHome() {
                 <Line
                   type="monotone"
                   dataKey="actual"
-                  stroke="#3b82f6"
+                  stroke="#009AFD"
                   strokeWidth={2}
                   name="Actual Earnings"
                 />
@@ -333,7 +333,7 @@ export function DashboardHome() {
                     className={`w-10 h-10 rounded-full bg-${activity.color}-100 flex items-center justify-center`}
                     style={{
                       background: activity.color === "green" ? "rgb(220, 252, 231)" :
-                                 activity.color === "blue" ? "rgb(219, 234, 254)" :
+                                 activity.color === "blue" ? "rgb(205, 235, 255)" :
                                  "rgb(243, 232, 255)"
                     }}
                     whileHover={{ rotate: 360, scale: 1.2 }}
@@ -343,7 +343,7 @@ export function DashboardHome() {
                       className={`w-5 h-5`}
                       style={{
                         color: activity.color === "green" ? "#16a34a" :
-                               activity.color === "blue" ? "#2563eb" :
+                               activity.color === "blue" ? "#009AFD" :
                                "#9333ea"
                       }}
                     />

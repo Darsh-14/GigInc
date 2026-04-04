@@ -7,6 +7,7 @@ import { PlansPage } from "./pages/plans-page";
 import { RiskInsightsPage } from "./pages/risk-insights-page";
 import { ClaimsPage } from "./pages/claims-page";
 import { HistoryPage } from "./pages/history-page";
+import { LiveMapPage } from "./pages/live-map-page";
 
 export const router = createBrowserRouter([
   {
@@ -26,6 +27,7 @@ export const router = createBrowserRouter([
       { path: "risk", Component: RiskInsightsPage },
       { path: "claims", Component: ClaimsPage },
       { path: "history", Component: HistoryPage },
+      { path: "live-map", Component: LiveMapPage },
     ],
   },
 ]);
