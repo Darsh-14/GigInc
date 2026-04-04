@@ -9,6 +9,15 @@ import { mockApi } from "../../services/mockApi";
 import { fetchLiveWeather } from "../../services/weatherApi";
 import { loadPremiumModel, isPremiumModelReady } from "../../services/mlEngine";
 import { sendPayoutSms } from "../../services/smsApi";
+import {
+  clearStoredClaimData,
+  getDisruptionDescription,
+  getDisruptionSource,
+  getStoredClaimHistory,
+  getStoredDisruptionHistory,
+  saveStoredClaimHistory,
+  saveStoredDisruptionHistory,
+} from "../../services/policyData";
 import { toast } from "sonner";
 
 const spoofLocations = {
@@ -60,7 +69,7 @@ export function ClaimsPage() {
   };
 
   const clearHistory = () => {
-    localStorage.removeItem("claimHistory");
+    clearStoredClaimData();
     setClaimHistory([]);
     toast.success("Wallet history completely reset.");
   };
@@ -68,8 +77,7 @@ export function ClaimsPage() {
   useEffect(() => {
     const savedUser = localStorage.getItem("user");
     if (savedUser) setUser(JSON.parse(savedUser));
-    const history = localStorage.getItem("claimHistory");
-    if (history) setClaimHistory(JSON.parse(history));
+    setClaimHistory(getStoredClaimHistory());
     loadPremiumModel().finally(() => setPremiumModelReady(isPremiumModelReady()));
   }, []);
 
@@ -178,8 +186,35 @@ export function ClaimsPage() {
 
     if (persist) {
       setClaimHistory((prev) => {
-        const newHistory = [...prev, { ...flow.claim, date: new Date().toISOString() }];
-        localStorage.setItem("claimHistory", JSON.stringify(newHistory));
+        const timestamp = new Date().toISOString();
+        const recordId = `CLM-${Date.now()}`;
+        const newRecord = {
+          ...flow.claim,
+          id: recordId,
+          date: timestamp,
+          payout: Number(flow.claim.payout || 0),
+          hoursLost: Number(flow.claim.hoursLost || 0),
+          expectedIncomeWithoutDisruption: Number(flow.claim.expectedIncomeWithoutDisruption || 0),
+          actualIncomeWithDisruption: Number(flow.claim.actualIncomeWithDisruption || 0),
+          expectedLoss: Number(flow.claim.expectedLoss || 0),
+        };
+        const newHistory = [...prev, newRecord];
+        saveStoredClaimHistory(newHistory);
+
+        const disruptionHistory = getStoredDisruptionHistory();
+        const disruptionRecord = {
+          id: recordId,
+          date: timestamp,
+          disruptionType,
+          severity: severity[0],
+          demandLevel: demandLevel[0],
+          payout: Number(flow.claim.payout || 0),
+          hoursLost: Number(flow.claim.hoursLost || 0),
+          status: "Completed" as const,
+          source: getDisruptionSource(disruptionType),
+          description: getDisruptionDescription(disruptionType, severity[0], demandLevel[0]),
+        };
+        saveStoredDisruptionHistory([...disruptionHistory, disruptionRecord]);
         return newHistory;
       });
     }

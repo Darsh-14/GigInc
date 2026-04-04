@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
@@ -6,15 +7,126 @@ import { Check, Star, Shield, Sparkles, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "motion/react";
 import { PayNowButton } from "../components/ui/PayNowButton";
+import { mockApi } from "../../services/mockApi";
+import { isPremiumModelReady, loadPremiumModel } from "../../services/mlEngine";
+
+const MIN_WEEKLY_PREMIUM = 20;
+const MAX_WEEKLY_PREMIUM = 50;
+
+function clampPremium(amount: number, min = MIN_WEEKLY_PREMIUM, max = MAX_WEEKLY_PREMIUM) {
+  return Math.min(max, Math.max(min, Math.round(amount)));
+}
+
+function formatCurrency(amount: number) {
+  return `\u20B9${amount}`;
+}
 
 export function PlansPage() {
+  const navigate = useNavigate();
   const [selectedPlan, setSelectedPlan] = useState<"normal" | "premium">("premium");
   const [purchasedPlan, setPurchasedPlan] = useState<"normal" | "premium" | null>(null);
+  const [normalPlanPremium, setNormalPlanPremium] = useState(25);
+  const [premiumPlanPremium, setPremiumPlanPremium] = useState(35);
+  const [isCalculatingPremium, setIsCalculatingPremium] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const hydratePlans = async () => {
+      const savedUser = localStorage.getItem("user");
+      if (!savedUser) {
+        if (isMounted) {
+          setIsCalculatingPremium(false);
+        }
+        return;
+      }
+
+      try {
+        const user = JSON.parse(savedUser);
+        if (user?.planType === "normal" || user?.planType === "premium") {
+          setSelectedPlan(user.planType);
+        }
+        if (user?.premiumStatus === "paid" && (user?.planType === "normal" || user?.planType === "premium")) {
+          setPurchasedPlan(user.planType);
+        }
+
+        const cachedBasePremium =
+          typeof user?.calculatedPremium === "number" && Number.isFinite(user.calculatedPremium)
+            ? clampPremium(user.calculatedPremium)
+            : null;
+
+        let basePremium = cachedBasePremium;
+
+        if (basePremium === null) {
+          if (!isPremiumModelReady()) {
+            await loadPremiumModel();
+          }
+
+          basePremium = await mockApi.calculatePremium({
+            dailyIncome: Number(user?.dailyIncome) || 500,
+            vehicle: user?.vehicle || "motorcycle",
+            zone: user?.location || "Urban",
+            persona: user?.persona || "hustler",
+          });
+
+          localStorage.setItem(
+            "user",
+            JSON.stringify({
+              ...user,
+              calculatedPremium: basePremium,
+            }),
+          );
+        }
+
+        if (!isMounted) return;
+
+        const normalPremium = clampPremium(basePremium, MIN_WEEKLY_PREMIUM, 42);
+        const premiumPremium = clampPremium(Math.max(basePremium + 10, normalPremium + 8));
+
+        setNormalPlanPremium(normalPremium);
+        setPremiumPlanPremium(premiumPremium);
+      } catch (error) {
+        console.warn("[InsureGig] Unable to calculate plan pricing from the saved profile.", error);
+        if (isMounted) {
+          setNormalPlanPremium(25);
+          setPremiumPlanPremium(35);
+        }
+      } finally {
+        if (isMounted) {
+          setIsCalculatingPremium(false);
+        }
+      }
+    };
+
+    hydratePlans();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleSelectPlan = (plan: "normal" | "premium") => {
     if (purchasedPlan) return;
     setSelectedPlan(plan);
-    toast.success(`${plan === "normal" ? "Normal" : "Premium"} plan selected!`);
+    toast.success(`${plan === "normal" ? "Normal" : "Premium"} plan selected.`);
+  };
+
+  const activatePlan = (plan: "normal" | "premium", premiumAmount: number, paymentId: string) => {
+    setPurchasedPlan(plan);
+    setSelectedPlan(plan);
+
+    const savedUser = localStorage.getItem("user");
+    const parsedUser = savedUser ? JSON.parse(savedUser) : {};
+    localStorage.setItem("user", JSON.stringify({
+      ...parsedUser,
+      premiumPaid: premiumAmount,
+      premiumStatus: "paid",
+      paymentId,
+      planType: plan,
+    }));
+
+    toast.success(`${plan === "normal" ? "Normal" : "Premium"} plan activated.`);
+    navigate("/dashboard");
   };
 
   return (
@@ -54,7 +166,7 @@ export function PlansPage() {
         transition={{ duration: 0.6 }}
       >
         <h1 className="text-3xl font-bold text-gray-900">Insurance Plans</h1>
-        <p className="text-gray-600">Choose the plan that best protects your income</p>
+        <p className="text-gray-600">Choose a plan and complete payment to unlock the rest of the app</p>
       </motion.div>
 
       {/* Current Plan */}
@@ -95,7 +207,7 @@ export function PlansPage() {
                 </div>
               </div>
               <Badge className={purchasedPlan ? "bg-green-600 px-3 py-1 shadow-md shadow-green-200" : "bg-brand-500 shadow-md shadow-brand-200"}>
-                {purchasedPlan ? "✅ Active Policy (Locked)" : "Pending Payment"}
+                {purchasedPlan ? "Policy Active" : "Pending Payment"}
               </Badge>
             </div>
           </CardContent>
@@ -140,14 +252,14 @@ export function PlansPage() {
                 animate={{ scale: 1 }}
                 transition={{ type: "spring", delay: 0.5 }}
               >
-                <span className="text-4xl font-bold text-gray-900">₹25</span>
+                <span className="text-4xl font-bold text-gray-900">{formatCurrency(normalPlanPremium)}</span>
                 <span className="text-gray-600">/week</span>
               </motion.div>
             </CardHeader>
             <CardContent className="space-y-4 relative z-10">
               <div className="space-y-3">
                 {[
-                  "Coverage up to ₹1,000/week",
+                  `Coverage up to ${formatCurrency(normalPlanPremium * 40)}/week`,
                   "Basic weather protection",
                   "Rain coverage",
                   "AI risk alerts",
@@ -169,19 +281,20 @@ export function PlansPage() {
               <motion.div whileHover={purchasedPlan ? {} : { scale: 1.05 }} whileTap={purchasedPlan ? {} : { scale: 0.95 }}>
                 {purchasedPlan === "normal" ? (
                   <div className="flex items-center justify-center gap-2 bg-green-50 border border-green-200 text-green-700 px-6 py-3 rounded-xl font-semibold">
-                    ✅ Policy Active
+                    Policy Active
                   </div>
                 ) : purchasedPlan ? (
                   <Button disabled className="w-full bg-gray-200 text-gray-500 shadow-none border-0">Plan Unavailable</Button>
+                ) : isCalculatingPremium ? (
+                  <Button disabled className="w-full bg-gray-200 text-gray-500 shadow-none border-0">Calculating premium...</Button>
                 ) : (
                   <div onClick={() => handleSelectPlan("normal")}>
                     <PayNowButton
-                      premiumAmount={25}
+                      premiumAmount={normalPlanPremium}
                       planName="Normal"
                       period="week"
-                      onSuccess={() => {
-                        setPurchasedPlan("normal");
-                        setSelectedPlan("normal");
+                      onSuccess={(paymentId) => {
+                        activatePlan("normal", normalPlanPremium, paymentId);
                       }}
                     />
                   </div>
@@ -264,14 +377,14 @@ export function PlansPage() {
                 animate={{ scale: 1 }}
                 transition={{ type: "spring", delay: 0.6 }}
               >
-                <span className="text-4xl font-bold text-gray-900">₹50</span>
+                <span className="text-4xl font-bold text-gray-900">{formatCurrency(premiumPlanPremium)}</span>
                 <span className="text-gray-600">/week</span>
               </motion.div>
             </CardHeader>
             <CardContent className="space-y-4 relative z-10">
               <div className="space-y-3">
                 {[
-                  { text: "Coverage up to ₹3,000/week", bold: true },
+                  { text: `Coverage up to ${formatCurrency(premiumPlanPremium * 60)}/week`, bold: true },
                   { text: "Full weather protection", bold: false },
                   { text: "All disruptions covered", bold: false },
                   { text: "Instant automatic payouts", bold: true },
@@ -302,19 +415,20 @@ export function PlansPage() {
               <motion.div whileHover={purchasedPlan ? {} : { scale: 1.05 }} whileTap={purchasedPlan ? {} : { scale: 0.95 }}>
                 {purchasedPlan === "premium" ? (
                   <div className="flex items-center justify-center gap-2 bg-green-50 border border-green-200 text-green-700 px-6 py-3 rounded-xl font-semibold">
-                    ✅ Policy Active
+                    Policy Active
                   </div>
                 ) : purchasedPlan ? (
                   <Button disabled className="w-full bg-gray-200 text-gray-500 shadow-none border-0">Plan Unavailable</Button>
+                ) : isCalculatingPremium ? (
+                  <Button disabled className="w-full bg-gray-200 text-gray-500 shadow-none border-0">Calculating premium...</Button>
                 ) : (
                   <div onClick={() => handleSelectPlan("premium")}>
                     <PayNowButton
-                      premiumAmount={50}
+                      premiumAmount={premiumPlanPremium}
                       planName="Premium"
                       period="week"
-                      onSuccess={() => {
-                        setPurchasedPlan("premium");
-                        setSelectedPlan("premium");
+                      onSuccess={(paymentId) => {
+                        activatePlan("premium", premiumPlanPremium, paymentId);
                       }}
                     />
                   </div>
@@ -360,12 +474,12 @@ export function PlansPage() {
                 </thead>
                 <tbody>
                   {[
-                    { feature: "Weekly Cost", normal: "₹25", premium: "₹50", type: "text" },
-                    { feature: "Maximum Coverage", normal: "₹1,000", premium: "₹3,000", type: "text" },
+                    { feature: "Weekly Cost", normal: formatCurrency(normalPlanPremium), premium: formatCurrency(premiumPlanPremium), type: "text" },
+                    { feature: "Maximum Coverage", normal: formatCurrency(normalPlanPremium * 40), premium: formatCurrency(premiumPlanPremium * 60), type: "text" },
                     { feature: "Claim Processing Time", normal: "24 hours", premium: "Instant", type: "highlight" },
                     { feature: "Rain Coverage", normal: "check", premium: "check", type: "check" },
-                    { feature: "AQI/Pollution Coverage", normal: "—", premium: "check", type: "check" },
-                    { feature: "All Disruptions", normal: "—", premium: "check", type: "check" }
+                    { feature: "AQI/Pollution Coverage", normal: "-", premium: "check", type: "check" },
+                    { feature: "All Disruptions", normal: "-", premium: "check", type: "check" }
                   ].map((row, index) => (
                     <motion.tr
                       key={row.feature}

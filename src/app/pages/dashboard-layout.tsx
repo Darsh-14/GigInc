@@ -8,8 +8,10 @@ export function DashboardLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [accessReady, setAccessReady] = useState(false);
+  const [isPaidUser, setIsPaidUser] = useState(false);
+  const [userName, setUserName] = useState("Gig Worker");
 
-  const menuItems = [
+  const paidMenuItems = [
     { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { path: "/dashboard/plans", label: "My Policy", icon: FileText },
     { path: "/dashboard/claims", label: "Claims", icon: AlertCircle },
@@ -17,6 +19,10 @@ export function DashboardLayout() {
     { path: "/dashboard/live-map", label: "Live Map", icon: Navigation },
     { path: "/dashboard/history", label: "History", icon: History },
   ];
+  const unpaidMenuItems = [
+    { path: "/dashboard/plans", label: "Choose Plan", icon: FileText },
+  ];
+  const menuItems = isPaidUser ? paidMenuItems : unpaidMenuItems;
 
   const handleLogout = () => {
     localStorage.removeItem("user");
@@ -32,15 +38,18 @@ export function DashboardLayout() {
 
     try {
       const user = JSON.parse(savedUser);
-      if (user?.premiumStatus !== "paid") {
-        navigate("/auth", { replace: true });
+      setUserName(user?.name?.trim() || "Gig Worker");
+      const paid = user?.premiumStatus === "paid";
+      setIsPaidUser(paid);
+      if (!paid && location.pathname !== "/dashboard/plans") {
+        navigate("/dashboard/plans", { replace: true });
         return;
       }
       setAccessReady(true);
     } catch {
       navigate("/auth", { replace: true });
     }
-  }, [navigate]);
+  }, [location.pathname, navigate]);
 
   if (!accessReady) {
     return null;
@@ -53,6 +62,10 @@ export function DashboardLayout() {
         <div className="p-6 border-b">
           <div className="flex items-center">
             <img src={logoGig} alt="InsureGig" className="h-24 w-auto object-contain" />
+          </div>
+          <div className="mt-4">
+            <p className="text-sm text-gray-500">Signed in as</p>
+            <p className="text-lg font-semibold text-gray-900">{userName}</p>
           </div>
         </div>
 
@@ -98,8 +111,12 @@ export function DashboardLayout() {
 
       {/* Mobile Top Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b p-4 z-20 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <img src={logoGig} alt="InsureGig" className="h-16 w-auto object-contain" />
+        <div className="flex items-center gap-3 min-w-0">
+          <img src={logoGig} alt="InsureGig" className="h-16 w-auto object-contain shrink-0" />
+          <div className="min-w-0">
+            <p className="text-xs text-gray-500">Signed in as</p>
+            <p className="text-sm font-semibold text-gray-900 truncate">{userName}</p>
+          </div>
         </div>
         <button
           onClick={handleLogout}
