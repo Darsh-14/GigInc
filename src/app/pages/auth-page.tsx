@@ -76,7 +76,10 @@ export function AuthPage() {
         },
         { onConflict: "email" },
       );
-      if (error) console.error("Supabase user insert error:", error);
+      if (error) {
+        console.error("Supabase user insert error:", error);
+        toast.error(`Backend Sync Error: ${error.message || "Failed to update database"}`);
+      }
     }
 
     localStorage.setItem("user", JSON.stringify(userData));

@@ -139,7 +139,10 @@ export function PlansPage() {
         premium_status: "paid",
         plan_type: plan,
       }).eq("email", updatedUser.email);
-      if (error) console.error("Supabase plan update error:", error);
+      if (error) {
+        console.error("Supabase plan update error:", error);
+        toast.error(`Plan Sync Error: ${error.message || "Failed to update database"}`);
+      }
     }
 
     toast.success(`${plan === "normal" ? t("normalPlan") : t("premiumPlan")} activated.`);
