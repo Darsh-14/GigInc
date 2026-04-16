@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { Button } from "../components/ui/button";
 import { CheckCircle, Cloud, TrendingUp, Wallet, ShieldCheck, Activity, Settings2, History, RefreshCw, Smartphone, Car, Wind, AlertTriangle, MapPin, MessageSquare, X } from "lucide-react";
 import { Slider } from "../components/ui/slider";
@@ -19,6 +19,7 @@ import {
   saveStoredDisruptionHistory,
 } from "../../services/policyData";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 const spoofLocations = {
   "Delhi": { lat: 28.7041, lon: 77.1025, name: "New Delhi, India" },
@@ -40,6 +41,7 @@ const GP = {
 };
 
 export function ClaimsPage() {
+  const { t } = useTranslation("claims");
   const [demoState, setDemoState] = useState<"idle" | "simulating" | "fraud_check" | "fraud_failed" | "calculating" | "done">("idle");
 
   const [user, setUser] = useState<any>({ name: "Rider", dailyIncome: 600, premiumPaid: 35, location: "Mumbai", platform: "Swiggy" });
@@ -64,14 +66,14 @@ export function ClaimsPage() {
 
   const maskPhoneNumber = (phone: string) => {
     const digits = phone.replace(/\D/g, "");
-    if (digits.length < 2) return "••";
-    return `${"•".repeat(Math.max(0, digits.length - 2))}${digits.slice(-2)}`;
+    if (digits.length < 2) return "â€¢â€¢";
+    return `${"â€¢".repeat(Math.max(0, digits.length - 2))}${digits.slice(-2)}`;
   };
 
   const clearHistory = () => {
     clearStoredClaimData();
     setClaimHistory([]);
-    toast.success("Wallet history completely reset.");
+    toast.success(t("walletResetSuccess"));
   };
 
   useEffect(() => {
@@ -82,21 +84,21 @@ export function ClaimsPage() {
   }, []);
 
   const handleFetchLiveWeather = async () => {
-    if (!user?.location) return toast.error("No location set for user profile.");
+    if (!user?.location) return toast.error(t("forLocation") + " " + t("error"));
     setIsFetchingWeather(true);
-    toast.info(`Fetching live openweathermap data for ${user.location}...`);
+    toast.info(`${t("liveApi")} - ${user.location}`);
     try {
       const data = await fetchLiveWeather(user.location);
       if (data.success) {
         setSeverity([data.severity]);
         const autoDemand = Math.max(5, Math.round(100 - (data.severity * 1.2)));
         setDemandLevel([autoDemand]);
-        toast.success(`Live Weather: ${data.description} (${data.temp}°C). Severity: ${data.severity}%. Platform Capacity dropped to ${autoDemand}%`);
+        toast.success(`${t("liveWeather")}: ${data.description} (${data.temp}°C). ${t("severityScore")}: ${data.severity}%.`);
       } else {
-        toast.error("Failed to fetch live API. Using mock fallback. " + (data.error || ""));
+        toast.error(t("liveApi") + ": " + (data.error || ""));
       }
     } catch (e) {
-      toast.error("Network error fetching live weather.");
+      toast.error(t("error"));
     } finally {
       setIsFetchingWeather(false);
     }
@@ -162,7 +164,7 @@ export function ClaimsPage() {
       setClaimResult(null);
       setFraudResult(null);
       setDemoState("idle");
-      if (!silent) toast.error(flow.reason || "Trigger conditions not met.");
+      if (!silent) toast.error(flow.reason || t("monitoring"));
       return;
     }
 
@@ -170,13 +172,13 @@ export function ClaimsPage() {
       setClaimResult(null);
       setFraudResult({ ...(flow.fraud || {}), spoofedDetails: spoofCoords });
       setDemoState("fraud_failed");
-      if (!silent) toast.error("Fraud checks failed. Payout blocked.");
+      if (!silent) toast.error(t("claimRejected"));
       return;
     }
 
     if (!flow.claim) {
       setDemoState("idle");
-      if (!silent) toast.error("Claim result missing.");
+      if (!silent) toast.error(t("error"));
       return;
     }
 
@@ -229,7 +231,7 @@ export function ClaimsPage() {
         const smsResult = await sendPayoutSms(phone, smsMessage);
         toast.dismiss(sendingToast);
         if (smsResult.ok) {
-          toast.success(`SMS delivered to ${maskedPhone}`);
+          toast.success(`${t("smsInsureGig")} ${t("delivered")} ${t("smsTo")} ${maskedPhone}`);
         } else {
           setSmsPreview({ phone: maskedPhone, message: smsMessage, ref });
         }
@@ -276,11 +278,11 @@ export function ClaimsPage() {
   return (
     <div className="w-full min-h-full bg-white px-4 py-6 md:min-h-screen md:px-6 lg:px-8 space-y-5">
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2">
         <div>
-          <h1 className="text-2xl font-semibold" style={{ color: GP.dark }}>Claims & Payouts</h1>
-          <p className="text-sm mt-0.5" style={{ color: GP.mid }}>Parametric triggers fire automatically based on live disruption data</p>
+          <h1 className="text-2xl font-semibold" style={{ color: GP.dark }}>{t("title")}</h1>
+          <p className="text-sm mt-0.5" style={{ color: GP.mid }}>{t("subtitle")}</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -288,7 +290,7 @@ export function ClaimsPage() {
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-colors"
             style={{ borderColor: GP.border, color: GP.mid, background: showAdmin ? GP.light : "white" }}
           >
-            <Settings2 className="w-4 h-4" /> Control Panel
+            <Settings2 className="w-4 h-4" /> {t("controlPanel")}
           </button>
           {demoState === "idle" && (
             <button
@@ -296,7 +298,7 @@ export function ClaimsPage() {
               className="inline-flex items-center gap-1.5 px-5 py-2 rounded-full text-sm font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
               style={{ background: GP.blue }}
             >
-              <Activity className="w-4 h-4" /> Release Payout
+              <Activity className="w-4 h-4" /> {t("releasePayout")}
             </button>
           )}
           {(demoState === "done" || demoState === "fraud_failed") && (
@@ -311,18 +313,18 @@ export function ClaimsPage() {
         </div>
       </div>
 
-      {/* ── GPS Spoof Detector card ─────────────────────────────────────── */}
+      {/* â”€â”€ GPS Spoof Detector card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="rounded-2xl border p-5" style={{ borderColor: GP.border, background: GP.light }}>
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "#E8F0FE" }}>
             <ShieldCheck className="w-4 h-4" style={{ color: GP.blue }} />
           </div>
-          <span className="font-semibold text-sm" style={{ color: GP.dark }}>GPS Spoof Detector</span>
+          <span className="font-semibold text-sm" style={{ color: GP.dark }}>{t("gpsSpoofDetector")}</span>
           <span
             className="text-xs px-2 py-0.5 rounded-full font-medium"
             style={{ background: premiumModelReady ? "#E6F4EA" : "#F1F3F4", color: premiumModelReady ? GP.green : GP.mid }}
           >
-            {premiumModelReady ? "Model Active" : "Loading model..."}
+            {premiumModelReady ? t("modelActive") : t("loadingModel")}
           </span>
           {(() => {
             const saved = localStorage.getItem('insuregig_gps_coords');
@@ -330,36 +332,36 @@ export function ClaimsPage() {
             const fresh = gps && (Date.now() - gps.ts < 5 * 60 * 1000);
             return fresh ? (
               <span className="text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1" style={{ background: "#E6F4EA", color: GP.green }}>
-                <MapPin className="w-3 h-3" /> Live GPS
+                <MapPin className="w-3 h-3" /> {t("liveGps")}
               </span>
             ) : (
               <span className="text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1" style={{ background: "#F1F3F4", color: GP.mid }}>
-                <MapPin className="w-3 h-3" /> No Live GPS
+                <MapPin className="w-3 h-3" /> {t("noLiveGps")}
               </span>
             );
           })()}
         </div>
         <p className="text-xs leading-relaxed" style={{ color: GP.mid }}>
-          Active checks: GPS vs IP · GPS vs platform-login · teleport speed · GPS accuracy fingerprint · movement linearity · weather contradiction · claim-history risk
+          {t("activeChecks")}
         </p>
         {fraudResult && (
           <div className="mt-3 rounded-xl border p-3 bg-white text-xs" style={{ borderColor: GP.border }}>
             <span className="font-semibold" style={{ color: GP.dark }}>
-              Latest: {fraudResult.isValid ? "Pass" : "Blocked"} · Risk score {fraudResult.riskScore ?? 0}
+              {t("latest")}: {fraudResult.isValid ? t("latestPass") : t("latestBlocked")} · {t("riskScore")} {fraudResult.riskScore ?? 0}
             </span>
             <span className="ml-3" style={{ color: GP.mid }}>
               GPS/IP {fraudResult?.checks?.gpsVsIpKm ?? 0} km
-              {fraudResult?.checks?.pathLinearity != null ? ` · Linearity ${fraudResult.checks.pathLinearity}` : ""}
-              {fraudResult?.checks?.weatherSeverityGap != null ? ` · Weather gap ${fraudResult.checks.weatherSeverityGap}` : ""}
+              {fraudResult?.checks?.pathLinearity != null ? ` Â· Linearity ${fraudResult.checks.pathLinearity}` : ""}
+              {fraudResult?.checks?.weatherSeverityGap != null ? ` Â· Weather gap ${fraudResult.checks.weatherSeverityGap}` : ""}
             </span>
           </div>
         )}
         {!fraudResult && (
-          <p className="mt-2 text-xs" style={{ color: GP.mid }}>Auto-monitoring active. Adjust sliders or fetch live weather to refresh.</p>
+          <p className="mt-2 text-xs" style={{ color: GP.mid }}>{t("autoMonitoring")}</p>
         )}
       </div>
 
-      {/* ── Control Panel ──────────────────────────────────────────────── */}
+      {/* â”€â”€ Control Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {showAdmin && (
         <div className="rounded-2xl border p-5 space-y-6 animate-in fade-in slide-in-from-top-4" style={{ borderColor: GP.border }}>
           <div className="flex items-center justify-between">
@@ -372,7 +374,7 @@ export function ClaimsPage() {
                 : { background: "white", color: GP.mid, borderColor: GP.border }}
             >
               <ShieldCheck className="w-3.5 h-3.5" />
-              {simulateFraud ? "Fraud Simulation ON" : "Test Anti-Fraud"}
+              {simulateFraud ? t("fraudSimOn") : t("testAntiFraud")}
             </button>
           </div>
 
@@ -380,12 +382,12 @@ export function ClaimsPage() {
             <div className="rounded-xl border p-4" style={{ borderColor: "#F5C6C2", background: "#FDECEA" }}>
               <div className="flex items-center gap-2 mb-3">
                 <MapPin className="w-4 h-4" style={{ color: GP.red }} />
-                <span className="text-sm font-semibold" style={{ color: GP.red }}>Spoofed GPS Target</span>
+                <span className="text-sm font-semibold" style={{ color: GP.red }}>{t("spoofedGpsTarget")}</span>
               </div>
               <div className="grid md:grid-cols-2 gap-3 items-start">
                 <Select value={spoofedCity} onValueChange={setSpoofedCity}>
                   <SelectTrigger className="h-10 rounded-xl text-sm" style={{ borderColor: "#F5C6C2", background: "white" }}>
-                    <SelectValue placeholder="Select city" />
+                    <SelectValue placeholder={t("selectCity")} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Delhi">Delhi, India (1,148 km)</SelectItem>
@@ -395,7 +397,7 @@ export function ClaimsPage() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs leading-relaxed" style={{ color: GP.red }}>
-                  GPS will transmit from <strong>{spoofLocations[spoofedCity as keyof typeof spoofLocations].name}</strong> while IP traces back to the normal zone.
+                  {t("gpsTransmitFrom")} <strong>{spoofLocations[spoofedCity as keyof typeof spoofLocations].name}</strong> {t("whileIpTraces")}
                 </p>
               </div>
             </div>
@@ -403,23 +405,23 @@ export function ClaimsPage() {
 
           <div className="grid md:grid-cols-2 gap-6">
             <div className="space-y-3">
-              <Label className="text-xs font-semibold uppercase tracking-wide" style={{ color: GP.mid }}>Disruption Type</Label>
+              <Label className="text-xs font-semibold uppercase tracking-wide" style={{ color: GP.mid }}>{t("disruptionType")}</Label>
               <Select value={disruptionType} onValueChange={setDisruptionType}>
                 <SelectTrigger className="h-10 rounded-xl text-sm" style={{ borderColor: GP.border }}>
-                  <SelectValue placeholder="Select type" />
+                  <SelectValue placeholder={t("selectType")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="weather">Extreme Weather Event</SelectItem>
-                  <SelectItem value="platform_outage">Delivery App Outage</SelectItem>
-                  <SelectItem value="traffic">Traffic Gridlock</SelectItem>
-                  <SelectItem value="aqi">Hazardous Air Quality</SelectItem>
+                  <SelectItem value="weather">{t("extremeWeather")}</SelectItem>
+                  <SelectItem value="platform_outage">{t("deliveryOutage")}</SelectItem>
+                  <SelectItem value="traffic">{t("trafficGridlock")}</SelectItem>
+                  <SelectItem value="aqi">{t("hazardousAqi")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <Label className="text-xs font-semibold uppercase tracking-wide" style={{ color: GP.mid }}>Severity Score</Label>
+                <Label className="text-xs font-semibold uppercase tracking-wide" style={{ color: GP.mid }}>{t("severityScore")}</Label>
                 <div className="flex items-center gap-2">
                   {disruptionType === "weather" && (
                     <button
@@ -440,7 +442,7 @@ export function ClaimsPage() {
 
             <div className="md:col-span-2 space-y-3 pt-4" style={{ borderTop: `1px solid ${GP.border}` }}>
               <div className="flex justify-between items-center">
-                <Label className="text-xs font-semibold uppercase tracking-wide" style={{ color: GP.mid }}>Delivery Demand Left</Label>
+                <Label className="text-xs font-semibold uppercase tracking-wide" style={{ color: GP.mid }}>{t("deliveryDemandLeft")}</Label>
                 <span className="text-sm font-bold tabular-nums" style={{ color: GP.blue }}>{demandLevel[0]}%</span>
               </div>
               <Slider value={demandLevel} onValueChange={setDemandLevel} max={100} step={1} className="py-4 cursor-pointer" />
@@ -449,7 +451,7 @@ export function ClaimsPage() {
         </div>
       )}
 
-      {/* ── Loading state ──────────────────────────────────────────────── */}
+      {/* â”€â”€ Loading state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {demoState !== "idle" && demoState !== "done" && demoState !== "fraud_failed" && (
         <div className="rounded-2xl border p-5 flex items-center gap-4 animate-pulse" style={{ borderColor: GP.border, background: GP.light }}>
           <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#E8F0FE" }}>
@@ -459,20 +461,20 @@ export function ClaimsPage() {
           </div>
           <div>
             {demoState === "simulating" && (
-              <p className="text-sm font-medium" style={{ color: GP.dark }}>Monitoring {disruptionType} + demand for {user.location}…</p>
+              <p className="text-sm font-medium" style={{ color: GP.dark }}>Monitoring {disruptionType} + demand for {user.location}â€¦</p>
             )}
             {demoState === "fraud_check" && (
-              <p className="text-sm font-medium" style={{ color: GP.dark }}>Verifying GPS vs IP and platform-login…</p>
+              <p className="text-sm font-medium" style={{ color: GP.dark }}>Verifying GPS vs IP and platform-loginâ€¦</p>
             )}
             {demoState === "calculating" && (
-              <p className="text-sm font-medium" style={{ color: GP.dark }}>{fraudResult?.distance}km variance confirmed. Calculating payout…</p>
+              <p className="text-sm font-medium" style={{ color: GP.dark }}>{fraudResult?.distance}km variance confirmed. Calculating payoutâ€¦</p>
             )}
             <p className="text-xs mt-0.5" style={{ color: GP.mid }}>This usually takes a moment</p>
           </div>
         </div>
       )}
 
-      {/* ── Fraud blocked ──────────────────────────────────────────────── */}
+      {/* â”€â”€ Fraud blocked â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {demoState === "fraud_failed" && fraudResult && (
         <div className="rounded-2xl border p-5 space-y-4 animate-in zoom-in-95 duration-300" style={{ borderColor: "#F5C6C2", background: "#FDECEA" }}>
           <div className="flex items-center gap-3">
@@ -480,7 +482,7 @@ export function ClaimsPage() {
               <AlertTriangle className="w-5 h-5" style={{ color: GP.red }} />
             </div>
             <div>
-              <p className="font-semibold text-sm" style={{ color: GP.dark }}>Claim Rejected — Fraud Detected</p>
+              <p className="font-semibold text-sm" style={{ color: GP.dark }}>{t("claimRejected")}</p>
               <p className="text-xs mt-0.5" style={{ color: GP.mid }}>Anti-spoofing engine flagged high risk across location and verification signals</p>
             </div>
           </div>
@@ -518,7 +520,7 @@ export function ClaimsPage() {
           {Array.isArray(fraudResult.reasons) && fraudResult.reasons.length > 0 && (
             <div className="rounded-xl p-4" style={{ background: "#FCDBD9", border: `1px solid #F5C6C2` }}>
               <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: GP.red }}>
-                Fraud Signals · Risk score {fraudResult.riskScore ?? 0}
+                Fraud Signals Â· Risk score {fraudResult.riskScore ?? 0}
               </p>
               <ul className="space-y-1">
                 {fraudResult.reasons.map((reason: string, idx: number) => (
@@ -533,12 +535,12 @@ export function ClaimsPage() {
 
           <div className="rounded-xl px-4 py-3 flex items-center gap-2" style={{ background: GP.red }}>
             <ShieldCheck className="w-4 h-4 text-white shrink-0" />
-            <p className="text-xs font-semibold text-white tracking-wide">POLICY SUSPENDED — PAYOUT BLOCKED — PENDING MANUAL REVIEW</p>
+            <p className="text-xs font-semibold text-white tracking-wide">POLICY SUSPENDED â€” PAYOUT BLOCKED â€” PENDING MANUAL REVIEW</p>
           </div>
         </div>
       )}
 
-      {/* ── SMS Preview modal ──────────────────────────────────────────── */}
+      {/* â”€â”€ SMS Preview modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {smsPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
           <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
@@ -570,8 +572,8 @@ export function ClaimsPage() {
               <div className="rounded-xl p-3 flex items-start gap-2" style={{ background: "#E6F4EA", border: `1px solid #A8D5B5` }}>
                 <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: GP.green }} />
                 <p className="text-xs leading-relaxed" style={{ color: GP.dark }}>
-                  This SMS would be delivered to the rider's phone instantly upon payout approval in production.
-                  <span className="font-semibold block mt-1">Ref: {smsPreview.ref}</span>
+                  {t("smsNote")}
+                  <span className="font-semibold block mt-1">{t("ref")}: {smsPreview.ref}</span>
                 </p>
               </div>
               <button
@@ -586,23 +588,23 @@ export function ClaimsPage() {
         </div>
       )}
 
-      {/* ── Success result ─────────────────────────────────────────────── */}
+      {/* â”€â”€ Success result â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {demoState === "done" && claimResult && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-6 duration-500">
 
           {/* Counterfactual */}
           <div className="rounded-2xl p-5 space-y-4" style={{ background: GP.blue }}>
             <div className="flex items-center justify-between">
-              <p className="font-semibold text-white text-sm">Counterfactual Evaluation</p>
+              <p className="font-semibold text-white text-sm">{t("counterfactualEvaluation")}</p>
               <span className="text-xs px-3 py-1 rounded-full font-semibold flex items-center gap-1 bg-white/20 text-white">
-                <Activity className="w-3 h-3" /> AI Result
+                <Activity className="w-3 h-3" /> {t("aiResult")}
               </span>
             </div>
             <div className="grid grid-cols-3 gap-3">
               {[
-                { label: "Normal Income", value: `₹${claimResult.expectedIncomeWithoutDisruption}`, sub: `Without disruption · ${claimResult.hoursLost}h`, dim: true },
-                { label: "Actual Income", value: `₹${claimResult.actualIncomeWithDisruption}`, sub: `Only ${demandLevel[0]}% demand`, dim: true },
-                { label: "Approved Payout", value: `₹${claimResult.payout}`, sub: "Instantly credited", dim: false },
+                { label: t("normalIncome"), value: `₹${claimResult.expectedIncomeWithoutDisruption}`, sub: `${t("withoutDisruption")} · ${claimResult.hoursLost}h`, dim: true },
+                { label: t("actualIncome"), value: `₹${claimResult.actualIncomeWithDisruption}`, sub: t("onlyDemand", { percent: demandLevel[0] }), dim: true },
+                { label: t("approvedPayout"), value: `₹${claimResult.payout}`, sub: t("instantlyCredited"), dim: false },
               ].map((item) => (
                 <div key={item.label} className="rounded-xl p-3 flex flex-col gap-1" style={{ background: "rgba(255,255,255,0.12)" }}>
                   <p className="text-xs text-brand-100 font-medium">{item.label}</p>
@@ -615,7 +617,7 @@ export function ClaimsPage() {
               {claimResult.explanation}
               <span className="flex items-center gap-1 mt-2 font-semibold text-green-300">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                Fraud Check Passed · {Math.round(fraudResult?.distance || 0)}km IP variance · Risk score {fraudResult?.riskScore ?? 0}
+                Fraud Check Passed Â· {Math.round(fraudResult?.distance || 0)}km IP variance Â· Risk score {fraudResult?.riskScore ?? 0}
               </span>
             </div>
           </div>
@@ -628,19 +630,19 @@ export function ClaimsPage() {
                   <CheckCircle className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <p className="font-semibold text-sm" style={{ color: GP.dark }}>Claim Approved</p>
-                  <p className="text-xs" style={{ color: GP.mid }}>Parametric trigger confirmed</p>
+                  <p className="font-semibold text-sm" style={{ color: GP.dark }}>{t("claimApproved")}</p>
+                  <p className="text-xs" style={{ color: GP.mid }}>{t("parametricTriggerConfirmed")}</p>
                 </div>
               </div>
               <span className="text-xs px-3 py-1 rounded-full font-semibold" style={{ background: "#E6F4EA", color: GP.green }}>
-                Completed
+                {t("completed")}
               </span>
             </div>
 
             <div className="grid md:grid-cols-3 gap-3">
               {[
                 {
-                  label: "Disruption Trigger",
+                  label: t("disruptionTrigger"),
                   content: (
                     <div className="flex items-center gap-2 mt-1">
                       {getDisruptionIcon(claimResult.disruptionType, "w-4 h-4")}
@@ -649,11 +651,11 @@ export function ClaimsPage() {
                   )
                 },
                 {
-                  label: "Platform Demand",
-                  content: <p className="text-xl font-bold mt-1" style={{ color: GP.dark }}>Only {demandLevel[0]}% left</p>
+                  label: t("platformDemand"),
+                  content: <p className="text-xl font-bold mt-1" style={{ color: GP.dark }}>{t("onlyLeft", { percent: demandLevel[0] })}</p>
                 },
                 {
-                  label: "Auto-Payout",
+                  label: t("autoPayout"),
                   content: <p className="text-xl font-bold mt-1" style={{ color: GP.green }}>₹{claimResult.payout}</p>
                 },
               ].map((item) => (
@@ -671,33 +673,33 @@ export function ClaimsPage() {
                     className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-full text-sm font-semibold text-white"
                     style={{ background: GP.green }}
                   >
-                    <Wallet className="w-4 h-4" /> View Wallet
+                    <Wallet className="w-4 h-4" /> {t("viewWallet")}
                   </button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md rounded-2xl">
                   <DialogHeader>
                     <DialogTitle className="flex items-center justify-between text-base w-full pr-6">
                       <div className="flex items-center gap-2">
-                        <Wallet className="w-4 h-4" style={{ color: GP.green }} /> Wallet History
+                        <Wallet className="w-4 h-4" style={{ color: GP.green }} /> {t("walletHistory")}
                       </div>
                       <Button variant="ghost" size="sm" onClick={clearHistory} className="h-7 px-2 text-xs text-gray-400 hover:text-red-600">
-                        Clear demo
+                        {t("clearDemo")}
                       </Button>
                     </DialogTitle>
                   </DialogHeader>
                   <div className="space-y-3">
                     <div className="rounded-xl p-4 flex justify-between items-center" style={{ background: "#E6F4EA" }}>
-                      <span className="text-sm font-medium" style={{ color: GP.dark }}>Total Lifetime Payouts</span>
+                      <span className="text-sm font-medium" style={{ color: GP.dark }}>{t("totalLifetimePayouts")}</span>
                       <span className="text-xl font-bold" style={{ color: GP.green }}>
-                        ₹{claimHistory.reduce((sum, claim) => sum + claim.payout, 0)}
+                        â‚¹{claimHistory.reduce((sum, claim) => sum + claim.payout, 0)}
                       </span>
                     </div>
                     <p className="text-xs uppercase tracking-wide font-medium flex items-center gap-1.5 mt-3" style={{ color: GP.mid }}>
-                      <History className="w-3.5 h-3.5" /> Recent Claims
+                      <History className="w-3.5 h-3.5" /> {t("recentClaims")}
                     </p>
                     <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
                       {claimHistory.length === 0 ? (
-                        <p className="text-sm text-center py-6" style={{ color: GP.mid }}>No payouts yet.</p>
+                        <p className="text-sm text-center py-6" style={{ color: GP.mid }}>{t("noPayoutsYet")}</p>
                       ) : (
                         [...claimHistory].reverse().map((claim, idx) => (
                           <div key={idx} className="rounded-xl p-3 bg-white flex justify-between items-center" style={{ border: `1px solid ${GP.border}` }}>
@@ -706,11 +708,11 @@ export function ClaimsPage() {
                                 {getDisruptionIcon(claim.disruptionType, "w-3.5 h-3.5")}
                                 <p className="text-sm font-semibold capitalize" style={{ color: GP.dark }}>{(claim.disruptionType || 'weather').replace('_', ' ')}</p>
                               </div>
-                              <p className="text-xs mt-0.5" style={{ color: GP.mid }}>{new Date(claim.date).toLocaleDateString()} · {claim.hoursLost}h impact</p>
+                              <p className="text-xs mt-0.5" style={{ color: GP.mid }}>{new Date(claim.date).toLocaleDateString()} Â· {claim.hoursLost}h impact</p>
                             </div>
                             <div className="text-right">
-                              <p className="text-sm font-bold" style={{ color: GP.green }}>+₹{claim.payout}</p>
-                              <span className="text-xs px-2 py-0.5 rounded-full mt-0.5 inline-block" style={{ background: "#E6F4EA", color: GP.green }}>Auto-Approved</span>
+                              <p className="text-sm font-bold" style={{ color: GP.green }}>+â‚¹{claim.payout}</p>
+                              <span className="text-xs px-2 py-0.5 rounded-full mt-0.5 inline-block" style={{ background: "#E6F4EA", color: GP.green }}>{t("autoApproved")}</span>
                             </div>
                           </div>
                         ))
@@ -725,7 +727,7 @@ export function ClaimsPage() {
                 className="flex-1 inline-flex items-center justify-center py-2.5 rounded-full text-sm font-semibold border transition-colors hover:bg-gray-50"
                 style={{ borderColor: GP.border, color: GP.dark }}
               >
-                Download Receipt
+                {t("downloadReceipt")}
               </button>
             </div>
           </div>
@@ -734,3 +736,4 @@ export function ClaimsPage() {
     </div>
   );
 }
+
