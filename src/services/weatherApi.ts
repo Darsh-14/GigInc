@@ -1,4 +1,4 @@
-export const OPENWEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY || "d8a79a398328d4a585ca417e3279d948";
+export const OPENWEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY || " your_weather_key is ";
 
 export async function fetchLiveWeather(city: string) {
   try {
