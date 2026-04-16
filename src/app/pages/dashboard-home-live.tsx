@@ -14,6 +14,7 @@ import {
   type StoredDisruptionRecord,
   type StoredUserProfile,
 } from "../../services/policyData";
+import { useTranslation } from "react-i18next";
 
 function formatCurrency(amount: number) {
   return `₹${amount.toLocaleString()}`;
@@ -49,6 +50,7 @@ function estimateWorkedHours(
 }
 
 export function DashboardHomeLive() {
+  const { t } = useTranslation("dashboard");
   const [user, setUser] = useState<StoredUserProfile>({});
   const [claimHistory, setClaimHistory] = useState<StoredClaimRecord[]>([]);
   const [disruptionHistory, setDisruptionHistory] = useState<StoredDisruptionRecord[]>([]);
@@ -117,12 +119,6 @@ export function DashboardHomeLive() {
       averageHours,
     };
   }, [disruptionHistory, estimatedBaseHours, user.dailyIncome]);
-  const avatarLetters = (user.name || "Gig Worker")
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() || "")
-    .join("");
 
   return (
     <div className="p-6 space-y-6 relative">
@@ -133,8 +129,8 @@ export function DashboardHomeLive() {
       />
 
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">Welcome back! Here&apos;s your weekly overview.</p>
+        <h1 className="text-3xl font-bold text-gray-900">{t("dashboard")}</h1>
+        <p className="text-gray-600">{t("welcomeBack")}</p>
       </motion.div>
 
       <div className="grid xl:grid-cols-[1.55fr_0.95fr] gap-6 items-start">
@@ -148,13 +144,12 @@ export function DashboardHomeLive() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-brand-500" />
-                Member Snapshot
+                {t("memberSnapshot")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
                 <div className="flex items-center gap-4 lg:w-72 lg:shrink-0">
-                  {/* Clickable avatar — uploads profile photo */}
                   <input
                     ref={photoInputRef}
                     type="file"
@@ -180,20 +175,19 @@ export function DashboardHomeLive() {
                         <User className="w-10 h-10 opacity-90" />
                       </div>
                     )}
-                    {/* Camera overlay on hover */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                       <Camera className="w-6 h-6 text-white" />
                       <span className="text-[10px] text-white font-medium leading-tight text-center px-1">
-                        {profilePhoto ? "Change" : "Add Photo"}
+                        {profilePhoto ? t("changePhoto") : t("addPhoto")}
                       </span>
                     </div>
                   </motion.div>
                   <div className="min-w-0">
-                    <h2 className="text-2xl font-bold text-gray-900">{user.name || "Gig Worker"}</h2>
-                    <p className="text-sm text-gray-500">{user.platform || "Delivery Partner"} in {user.location || "India"}</p>
+                    <h2 className="text-2xl font-bold text-gray-900">{user.name || t("gigWorker")}</h2>
+                    <p className="text-sm text-gray-500">{user.platform || t("deliveryPartner")} {t("inString")} {user.location || "India"}</p>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <Badge className="bg-brand-100 text-brand-700 hover:bg-brand-100">{claimCount} claims recorded</Badge>
-                      <Badge className="bg-green-100 text-green-700 hover:bg-green-100">{formatCurrency(totalPayout)} paid out</Badge>
+                      <Badge className="bg-brand-100 text-brand-700 hover:bg-brand-100">{claimCount} {t("claimsRecorded")}</Badge>
+                      <Badge className="bg-green-100 text-green-700 hover:bg-green-100">{formatCurrency(totalPayout)} {t("paidOut")}</Badge>
                     </div>
                   </div>
                 </div>
@@ -202,46 +196,46 @@ export function DashboardHomeLive() {
                   <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm">
                     <p className="mb-2 flex items-center gap-2 text-xs font-medium text-gray-500">
                       <Phone className="h-4 w-4 text-brand-500" />
-                      Phone
+                      {t("phoneTitle")}
                     </p>
-                    <p className="text-gray-800">{user.phone || "Not added"}</p>
+                    <p className="text-gray-800">{user.phone || t("notAdded")}</p>
                   </div>
                   <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm">
                     <p className="mb-2 flex items-center gap-2 text-xs font-medium text-gray-500">
                       <Mail className="h-4 w-4 text-brand-500" />
-                      Email
+                      {t("emailTitle")}
                     </p>
-                    <p className="text-gray-800 break-all">{user.email || "Not added"}</p>
+                    <p className="text-gray-800 break-all">{user.email || t("notAdded")}</p>
                   </div>
                   <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm">
                     <p className="mb-2 flex items-center gap-2 text-xs font-medium text-gray-500">
                       <MapPin className="h-4 w-4 text-brand-500" />
-                      Location
+                      {t("locationTitle")}
                     </p>
-                    <p className="text-gray-800">{user.location || "Not added"}</p>
+                    <p className="text-gray-800">{user.location || t("notAdded")}</p>
                   </div>
                   <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm">
                     <p className="mb-2 flex items-center gap-2 text-xs font-medium text-gray-500">
                       <Shield className="h-4 w-4 text-brand-500" />
-                      Policy
+                      {t("policyTitle")}
                     </p>
-                    <p className="text-gray-800">{user.planType ? `${user.planType[0].toUpperCase()}${user.planType.slice(1)} plan` : "No plan selected"}</p>
+                    <p className="text-gray-800">{user.planType ? `${user.planType[0].toUpperCase()}${user.planType.slice(1)} ${t("planActive")}` : t("noPlanSelected")}</p>
                   </div>
                 </div>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
-                  <p className="text-xs font-medium text-gray-500">Days Active</p>
+                  <p className="text-xs font-medium text-gray-500">{t("daysActive")}</p>
                   <p className="mt-1 text-xl font-bold text-gray-900">{workdayStats.activeDays}</p>
                 </div>
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
-                  <p className="text-xs font-medium text-gray-500">Highest Hours Worked</p>
+                  <p className="text-xs font-medium text-gray-500">{t("highestHoursWorked")}</p>
                   <p className="mt-1 text-xl font-bold text-gray-900">{workdayStats.highestWorkedHours}h</p>
                   <p className="mt-1 text-xs text-gray-500">{formatFullDate(workdayStats.highestWorkedDate)}</p>
                 </div>
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
-                  <p className="text-xs font-medium text-gray-500">Average Daily Hours</p>
+                  <p className="text-xs font-medium text-gray-500">{t("averageDailyHours")}</p>
                   <p className="mt-1 text-xl font-bold text-gray-900">{workdayStats.averageHours.toFixed(1)}h</p>
                 </div>
               </div>
@@ -254,7 +248,7 @@ export function DashboardHomeLive() {
             <Card className="relative overflow-hidden h-full">
               <motion.div className="absolute top-0 right-0 w-32 h-32 bg-brand-400/20 rounded-full blur-2xl" animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.5, 0.3] }} transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }} />
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-5">
-                <CardTitle className="text-sm font-medium text-gray-600">Weekly Earnings Protected</CardTitle>
+                <CardTitle className="text-sm font-medium text-gray-600">{t("weeklyEarningsProtected")}</CardTitle>
                 <motion.div whileHover={{ rotate: 360, scale: 1.2 }} transition={{ type: "spring", stiffness: 260, damping: 20 }}>
                   <Shield className="w-5 h-5 text-brand-500" />
                 </motion.div>
@@ -263,7 +257,7 @@ export function DashboardHomeLive() {
                 <motion.div className="text-2xl font-bold text-gray-900" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 200, delay: 0.3 }}>
                   {formatCurrency((Number(user.dailyIncome) || 500) * 7)}
                 </motion.div>
-                <p className="text-sm text-gray-500 mt-1">{user.planType ? `${user.planType[0].toUpperCase()}${user.planType.slice(1)} plan active` : "Plan pending"}</p>
+                <p className="text-sm text-gray-500 mt-1">{user.planType ? `${user.planType[0].toUpperCase()}${user.planType.slice(1)} ${t("planActive")}` : t("planPending")}</p>
               </CardContent>
             </Card>
           </motion.div>
@@ -272,7 +266,7 @@ export function DashboardHomeLive() {
             <Card className="relative overflow-hidden h-full">
               <motion.div className="absolute top-0 right-0 w-32 h-32 bg-green-400/20 rounded-full blur-2xl" animate={{ scale: [1.3, 1, 1.3], opacity: [0.5, 0.3, 0.5] }} transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }} />
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-5">
-                <CardTitle className="text-sm font-medium text-gray-600">Active Coverage</CardTitle>
+                <CardTitle className="text-sm font-medium text-gray-600">{t("activeCoverage")}</CardTitle>
                 <motion.div whileHover={{ rotate: 360, scale: 1.2 }} transition={{ type: "spring", stiffness: 260, damping: 20 }}>
                   <TrendingUp className="w-5 h-5 text-green-600" />
                 </motion.div>
@@ -281,7 +275,7 @@ export function DashboardHomeLive() {
                 <motion.div className="text-2xl font-bold text-green-600" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 200, delay: 0.4 }}>
                   {formatCurrency(maxCoverage)}
                 </motion.div>
-                <p className="text-sm text-gray-500 mt-1">Maximum payout available</p>
+                <p className="text-sm text-gray-500 mt-1">{t("maximumPayoutAvailable")}</p>
               </CardContent>
             </Card>
           </motion.div>
@@ -290,17 +284,17 @@ export function DashboardHomeLive() {
             <Card className="relative overflow-hidden h-full sm:col-span-2 xl:col-span-1">
               <motion.div className="absolute top-0 right-0 w-32 h-32 bg-orange-400/20 rounded-full blur-2xl" animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.5, 0.3] }} transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }} />
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-5">
-                <CardTitle className="text-sm font-medium text-gray-600">Latest Disruption</CardTitle>
+                <CardTitle className="text-sm font-medium text-gray-600">{t("latestDisruption")}</CardTitle>
                 <motion.div animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 2, repeat: Infinity }}>
                   <AlertTriangle className="w-5 h-5 text-orange-600" />
                 </motion.div>
               </CardHeader>
               <CardContent className="pt-1 pb-5">
                 <motion.div className="text-2xl font-bold text-orange-600 leading-tight" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 200, delay: 0.5 }}>
-                  {latestDisruption ? getDisruptionLabel(latestDisruption.disruptionType) : "No events"}
+                  {latestDisruption ? getDisruptionLabel(latestDisruption.disruptionType) : t("noEvents")}
                 </motion.div>
                 <p className="text-sm text-gray-500 mt-1">
-                  {latestDisruption ? `${latestDisruption.severity}% severity and ${latestDisruption.demandLevel}% demand left` : "Run a claim to start tracking disruption history"}
+                  {latestDisruption ? t("severityAndDemand", { severity: latestDisruption.severity, demand: latestDisruption.demandLevel }) : t("runClaimToStartTracking")}
                 </p>
               </CardContent>
             </Card>
@@ -313,7 +307,7 @@ export function DashboardHomeLive() {
           <motion.div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-brand-500 via-brand-400 to-brand-500" animate={{ x: ["-100%", "100%"] }} transition={{ duration: 3, repeat: Infinity, ease: "linear" }} />
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2">
-              Earnings vs Protected Income
+              {t("earningsVsProtected")}
               <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }}>
                 <Sparkles className="w-5 h-5 text-yellow-500" />
               </motion.div>
@@ -326,8 +320,8 @@ export function DashboardHomeLive() {
                 <XAxis dataKey="day" />
                 <YAxis />
                 <Tooltip />
-                <Line type="monotone" dataKey="actual" stroke="#009AFD" strokeWidth={2} name="Actual Earnings" />
-                <Line type="monotone" dataKey="protected" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" name="Protected Income" />
+                <Line type="monotone" dataKey="actual" stroke="#009AFD" strokeWidth={2} name={t("actualEarnings")} />
+                <Line type="monotone" dataKey="protected" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" name={t("protectedIncome")} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
@@ -343,12 +337,12 @@ export function DashboardHomeLive() {
                 <motion.div animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.1, 1] }} transition={{ duration: 1.5, repeat: Infinity }}>
                   <AlertTriangle className="w-5 h-5 text-orange-600" />
                 </motion.div>
-                <CardTitle className="text-orange-900">Active Alerts</CardTitle>
+                <CardTitle className="text-orange-900">{t("activeAlerts")}</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="space-y-3 relative z-10 min-h-[220px]">
               {disruptionHistory.length === 0 ? (
-                <div className="flex min-h-[156px] items-center rounded-lg bg-white p-4 text-sm text-gray-600">No disruption alerts yet. Once claims run, this panel will show your latest triggers.</div>
+                <div className="flex min-h-[156px] items-center rounded-lg bg-white p-4 text-sm text-gray-600">{t("noDisruptionAlerts")}</div>
               ) : (
                 [...disruptionHistory].reverse().slice(0, 2).map((event) => {
                   const Icon = getDisruptionIcon(event.disruptionType);
@@ -376,12 +370,12 @@ export function DashboardHomeLive() {
         <motion.div initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, delay: 0.6 }}>
           <Card className="h-full">
             <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
+              <CardTitle>{t("recentActivity")}</CardTitle>
             </CardHeader>
             <CardContent className="min-h-[220px]">
               <div className="space-y-4">
                 {recentClaims.length === 0 ? (
-                  <div className="flex min-h-[156px] items-center text-sm text-gray-600">No claim activity yet. Complete a payout flow from Claims to populate this feed.</div>
+                  <div className="flex min-h-[156px] items-center text-sm text-gray-600">{t("noClaimActivity")}</div>
                 ) : (
                   recentClaims.map((claim, index) => {
                     const claimEvent = disruptionHistory.find((event) => event.id === claim.id);
@@ -404,7 +398,7 @@ export function DashboardHomeLive() {
                           <Icon className="w-5 h-5" style={{ color: index === 0 ? "#16a34a" : index === 1 ? "#009AFD" : "#9333ea" }} />
                         </motion.div>
                         <div className="flex-1">
-                          <p className="font-medium text-gray-900">{getDisruptionLabel(claim.disruptionType)} claim approved</p>
+                          <p className="font-medium text-gray-900">{getDisruptionLabel(claim.disruptionType)} {t("claimApproved")}</p>
                           <p className="text-sm text-gray-600">{claimEvent ? claimEvent.description : claim.explanation}</p>
                           <p className="text-xs text-gray-500 mt-1">{formatTimeAgo(claim.date)}</p>
                         </div>

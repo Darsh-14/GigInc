@@ -35,5 +35,16 @@
   "rainDesc": "Moderate rainfall affecting deliveries",
   "lowDemandDesc": "Significantly reduced order volume",
   "severeRainDesc": "Severe rainfall disruption",
-  "veryPoorAqiDesc": "Very poor air quality conditions"
+  "veryPoorAqiDesc": "Very poor air quality conditions",
+  "disruptionHistory": "Disruption History",
+  "historyDesc": "A record of each disruption event and the payout released for that event",
+  "totalDisruptions": "Total Disruptions",
+  "loggedEvents": "Logged events",
+  "claimedAgainst": "Claimed against disruptions",
+  "disruptionRecords": "Disruption Records",
+  "breakdownByType": "Breakdown By Disruption Type",
+  "noDisruptionSummaries": "No disruption summaries yet.",
+  "eventCount": "{{count}} event",
+  "eventsCount": "{{count}} events",
+  "noHistoryYet": "No disruption history yet. Run a claim from the Claims page to populate this table."
 }

@@ -9,12 +9,14 @@ import {
   getStoredDisruptionHistory,
   type StoredDisruptionRecord,
 } from "../../services/policyData";
+import { useTranslation } from "react-i18next";
 
 function formatCurrency(amount: number) {
   return `₹${amount.toLocaleString()}`;
 }
 
 export function HistoryPageLive() {
+  const { t } = useTranslation("history");
   const [historyData, setHistoryData] = useState<StoredDisruptionRecord[]>([]);
 
   useEffect(() => {
@@ -39,74 +41,74 @@ export function HistoryPageLive() {
 
   const insight =
     historyData.length === 0
-      ? "No disruption records yet. Once claims run, this page will separate the disruption event history from your dashboard activity feed."
+      ? t("noHistoryYet", "No disruption history yet. Run a claim from the Claims page to populate this table.")
       : `${getDisruptionLabel(historyData[historyData.length - 1].disruptionType)} is your latest logged disruption. History tracks the trigger event, source, lost hours, and payout for each disruption separately from the dashboard summary.`;
 
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Disruption History</h1>
-        <p className="text-gray-600">A record of each disruption event and the payout released for that event</p>
+        <h1 className="text-3xl font-bold text-gray-900">{t("disruptionHistory")}</h1>
+        <p className="text-gray-600">{t("historyDesc")}</p>
       </div>
 
       <div className="grid md:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Total Disruptions</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">{t("totalDisruptions")}</CardTitle>
             <CalendarDays className="w-5 h-5 text-brand-500" />
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-gray-900">{historyData.length}</div>
-            <p className="text-sm text-gray-500 mt-1">Logged events</p>
+            <p className="text-sm text-gray-500 mt-1">{t("loggedEvents")}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Total Payouts</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">{t("totalPayouts")}</CardTitle>
             <TrendingDown className="w-5 h-5 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600">{formatCurrency(totalPayout)}</div>
-            <p className="text-sm text-gray-500 mt-1">Claimed against disruptions</p>
+            <p className="text-sm text-gray-500 mt-1">{t("claimedAgainst")}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Hours Protected</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">{t("hoursProtected")}</CardTitle>
             <Cloud className="w-5 h-5 text-orange-600" />
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-orange-600">{totalHours.toFixed(1)}h</div>
-            <p className="text-sm text-gray-500 mt-1">Compensated work hours</p>
+            <p className="text-sm text-gray-500 mt-1">{t("hoursCompensated")}</p>
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Disruption Records</CardTitle>
+          <CardTitle>{t("disruptionRecords")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Disruption</TableHead>
+                  <TableHead>{t("date")}</TableHead>
+                  <TableHead>{t("event")}</TableHead>
                   <TableHead>Source</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-center">Hours Lost</TableHead>
-                  <TableHead className="text-center">Status</TableHead>
-                  <TableHead className="text-right">Payout</TableHead>
+                  <TableHead>{t("description")}</TableHead>
+                  <TableHead className="text-center">{t("hoursLost")}</TableHead>
+                  <TableHead className="text-center">{t("status")}</TableHead>
+                  <TableHead className="text-right">{t("payout")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {orderedHistory.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center text-gray-500 py-8">
-                      No disruption history yet. Run a claim from the Claims page to populate this table.
+                      {t("noHistoryYet")}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -144,13 +146,13 @@ export function HistoryPageLive() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Breakdown By Disruption Type</CardTitle>
+          <CardTitle>{t("breakdownByType")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
             {Object.keys(groupedByType).length === 0 ? (
               <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
-                No disruption summaries yet.
+                {t("noDisruptionSummaries")}
               </div>
             ) : (
               Object.entries(groupedByType).map(([type, summary]) => {
@@ -161,7 +163,7 @@ export function HistoryPageLive() {
                       <Icon className="w-5 h-5 text-brand-500" />
                       <div>
                         <p className="font-medium text-gray-900">{getDisruptionLabel(type)}</p>
-                        <p className="text-sm text-gray-600">{summary.count} event{summary.count === 1 ? "" : "s"}</p>
+                        <p className="text-sm text-gray-600">{summary.count === 1 ? t("eventCount", { count: 1 }) : t("eventsCount", { count: summary.count })}</p>
                       </div>
                     </div>
                     <span className="text-xl font-bold text-gray-900">{formatCurrency(summary.payout)}</span>
@@ -178,7 +180,7 @@ export function HistoryPageLive() {
           <div className="flex items-start gap-3">
             <TrendingDown className="w-6 h-6 text-brand-500 mt-0.5" />
             <div>
-              <p className="font-semibold text-brand-900 mb-1">Insights</p>
+              <p className="font-semibold text-brand-900 mb-1">{t("insights")}</p>
               <p className="text-sm text-gray-700">{insight}</p>
             </div>
           </div>
