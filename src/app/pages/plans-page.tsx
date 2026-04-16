@@ -11,6 +11,7 @@ import { PayNowButton } from "../components/ui/PayNowButton";
 import { mockApi } from "../../services/mockApi";
 import { isPremiumModelReady, loadPremiumModel } from "../../services/mlEngine";
 import { useTranslation } from "react-i18next";
+import { supabase } from "../../services/supabaseClient";
 
 const MIN_WEEKLY_PREMIUM = 20;
 const MAX_WEEKLY_PREMIUM = 50;
@@ -117,19 +118,29 @@ export function PlansPage() {
     toast.success(`${plan === "normal" ? t("normalPlan") : t("premiumPlan")} selected.`);
   };
 
-  const activatePlan = (plan: "normal" | "premium", premiumAmount: number, paymentId: string) => {
+  const activatePlan = async (plan: "normal" | "premium", premiumAmount: number, paymentId: string) => {
     setPurchasedPlan(plan);
     setSelectedPlan(plan);
 
     const savedUser = localStorage.getItem("user");
     const parsedUser = savedUser ? JSON.parse(savedUser) : {};
-    localStorage.setItem("user", JSON.stringify({
+    const updatedUser = {
       ...parsedUser,
       premiumPaid: premiumAmount,
       premiumStatus: "paid",
       paymentId,
       planType: plan,
-    }));
+    };
+    
+    localStorage.setItem("user", JSON.stringify(updatedUser));
+
+    if (supabase && updatedUser.email) {
+      const { error } = await supabase.from("users").update({
+        premium_status: "paid",
+        plan_type: plan,
+      }).eq("email", updatedUser.email);
+      if (error) console.error("Supabase plan update error:", error);
+    }
 
     toast.success(`${plan === "normal" ? t("normalPlan") : t("premiumPlan")} activated.`);
     navigate("/dashboard");

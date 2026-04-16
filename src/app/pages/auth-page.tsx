@@ -83,6 +83,45 @@ export function AuthPage() {
     navigate("/dashboard/plans");
   };
 
+  const handleLogin = async () => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast.error("Please enter a valid email address to login.");
+      return;
+    }
+
+    if (supabase) {
+      const { data, error } = await supabase.from("users").select("*").eq("email", formData.email).maybeSingle();
+      
+      if (error || !data) {
+        toast.error("User not found or error occurred. Please sign up.");
+        return;
+      }
+      
+      const dbUser = {
+        name: data.name || formData.name,
+        email: data.email,
+        phone: data.phone || formData.phone,
+        platform: data.platform || formData.platform,
+        location: data.location || formData.location,
+        vehicle: data.vehicle || formData.vehicle,
+        dailyIncome: data.daily_income || formData.dailyIncome,
+        premiumStatus: data.premium_status || "pending",
+        planType: data.plan_type || "none",
+      };
+      
+      localStorage.setItem("user", JSON.stringify(dbUser));
+      
+      if (dbUser.planType !== "none" && dbUser.planType) {
+        navigate("/dashboard");
+      } else {
+        navigate("/dashboard/plans");
+      }
+    } else {
+      toast.error("Backend not configured.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-50 to-brand-100 flex items-center justify-center p-6">
       <div className="w-full max-w-md my-8">
@@ -245,7 +284,7 @@ export function AuthPage() {
                   type="button"
                   variant="outline"
                   className="w-full"
-                  onClick={continueToPlans}
+                  onClick={handleLogin}
                 >
                   <LogIn className="w-4 h-4 mr-2" />
                   Login
