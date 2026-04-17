@@ -2,7 +2,8 @@
 
 > *trigger-based weekly insurance, Powered by AI*
 
-🚀 **Live Demo:** [https://gig-inc-three.vercel.app](https://gig-inc-three.vercel.app)
+🚀 **Live Demo:** [https://gig-inc-three.vercel.app](https://gig-inc-three.vercel.app) 
+   **Pitch Deck:** [https://drive.google.com/drive/folders/1ywwNL-8XlBysUmgBd6f2lSF2xdSGzBwR](https://drive.google.com/drive/folders/1ywwNL-8XlBysUmgBd6f2lSF2xdSGzBwR)
 
 ---
 
