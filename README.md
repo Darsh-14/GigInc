@@ -56,8 +56,13 @@
 - Live weather integration using OpenWeatherMap API with real-time risk scoring.
 - SMS payout notification flow through a separate Twilio SMS gateway (Cloudflare Worker or local Node server).
 - Browser-served TensorFlow premium model from `public/premium_model/`.
-- Live GPS map with pre-mapped risk zones across 5 Indian cities.
+- **Disruption Prediction Model** (TensorFlow.js, 16-input, 4-output) trained on AQI + IMD rainfall datasets — predicts weather, AQI, traffic, and platform disruption severity 30 minutes ahead.
+- **ML-Driven Rerouting Simulation**: predicts disruption zones on the live map and reroutes the delivery driver around them using OSRM real-road routing with `alternatives=3`.
+- Live GPS map with **29 pre-mapped risk zones across 8 Indian cities** (Mumbai, Delhi, Bangalore, Hyderabad, Chennai, Kolkata, Pune, Ahmedabad).
 - Disruption history log with aggregate stats and type breakdown.
+- **AI Chatbot** powered by Google Gemini for in-app support.
+- **Supabase** backend for user data, policy and claims persistence.
+- **Multilingual i18n** support: English, Hindi, Marathi, Gujarati, Tamil, Telugu.
 
 ---
 
@@ -218,7 +223,45 @@ Unlike traditional insurance, **no claim filing is required**. Payouts are trigg
 
 **Justification:** *Static pricing tables fail to capture how variable real-world disruptions are. An ML model gracefully predicts how badly a specific storm combined with a specific drop in app demand slashes a rider's daily earnings, ensuring they get paid the exact fair counterfactual amount.*
 
-### 2. Live Anti-Fraud Spoofing Engine
+### 2. Disruption Prediction Model (Ripple Model)
+**Model Type:** Multi-output Dense Neural Network (TensorFlow/Keras → TF.js)
+**Architecture:** 16-input features → Dense(64, ReLU) → Dense(32, ReLU) → Dense(4, Sigmoid)
+
+**16-Input Feature Vector:**
+- Temporal: `month_sin`, `month_cos`, `dow_sin`, `dow_cos`, `is_monsoon`, `is_winter_fog`
+- Geospatial: `lat_norm`, `lon_norm` (normalized to India's bounding box)
+- Environmental: `aqi_norm`, `aqi_lag1`, `aqi_lag7`, `aqi_roll7`, `rain_norm`, `rain_lag1`, `rain_lag7`, `rain_roll7`
+
+**4-Output Disruption Scores** (each ∈ [0, 1]):
+- `weather` — rainfall/storm severity
+- `aqi` — air quality hazard level
+- `traffic` — congestion disruption probability
+- `platform` — platform outage risk
+
+**Overall Risk Score:**
+```
+overallRisk = weather × 0.35 + aqi × 0.30 + traffic × 0.25 + platform × 0.10
+```
+
+**Training Dataset:** AQI data (2010–2023) from CPCB + IMD rainfall records across 8 Indian cities. Trained in `DisruptionModel_Colab.ipynb`, exported as TF.js LayersModel to `public/disruption_model/`.
+
+**Inference:** Runs entirely in-browser via TensorFlow.js WebGL backend. Predicts disruption 30 minutes ahead and triggers rerouting in the live map simulation.
+
+### 3. ML-Driven Rerouting Engine
+**Purpose:** Proactively reroutes delivery drivers around predicted disruption zones before they encounter them.
+
+**How it works:**
+1. Fetches the direct road route from OSRM (`overview=full`, `geometries=geojson`)
+2. Places the predicted disruption zone at 40% along the actual road route using cumulative distance interpolation
+3. Requests OSRM alternative routes (`alternatives=3`) — all follow real roads
+4. Selects the first alternative that does not intersect the danger zone
+5. Falls back to perpendicular waypoint-based OSRM routing if no alternative naturally avoids
+6. Validates every candidate route against the danger zone via point-by-point distance checks
+7. Animates the driver along the safe route on the Leaflet map
+
+**Key guarantee:** Both the direct (unsafe) and rerouted (safe) paths follow actual roads — no geometric straight lines.
+
+### 4. Live Anti-Fraud Spoofing Engine
 **Model Type:** Heuristic Distance Variance + Location Cross-Verification
 **Signals Monitored:**
 - Raw HTML5 Device GPS Coordinates
@@ -226,7 +269,7 @@ Unlike traditional insurance, **no claim filing is required**. Payouts are trigg
 
 **Output:** Instantly rejects claims if a rider spoofs their GPS (e.g., claiming to be in a flooded area while their network IP resolves thousands of kilometers away in a different state).
 
-### 3. Visualizations
+### 5. Visualizations
 **Approach:** We run a parallel Streamlit dashboard to allow complete transparency into the Random Forest. It exposes the feature importance graph, training dataset size (5,000 synthetic records), and allows manual slider manipulation to test payout thresholds seamlessly.
 
 ---
@@ -247,18 +290,23 @@ Unlike traditional insurance, **no claim filing is required**. Payouts are trigg
 ### AI/ML
 | Component | Technology | Reason |
 |-----------|-----------|--------|
-| In-browser Inference | TensorFlow.js | Runs trained premium model directly in the browser |
-| Model Training | Python, Pandas, Numpy, scikit-learn | Proven data science foundation for non-linear regression |
+| In-browser Inference | TensorFlow.js | Runs premium + disruption models directly in the browser (WebGL) |
+| Disruption Model | Keras multi-output NN → TF.js | 16-feature, 4-output disruption severity prediction |
+| Road Routing | OSRM (Project OSRM) | Real-road route computation with alternatives for ML rerouting |
+| Model Training | Python, Pandas, Numpy, Keras | Proven data science foundation for neural network training |
 | Dashboards | Streamlit | Rapid creation of Machine Learning visualizers |
+| AI Chatbot | Google Gemini API | In-app conversational support for users |
 | Connectivity | Localtunnel / Ngrok | Exposing Colab/Streamlit services to the public web |
 
 ### Infrastructure & Integrations
 | Component | Technology |
 |-----------|-----------|
+| Backend / Database | Supabase (PostgreSQL, Auth, Row-Level Security) |
 | Payment Gateway | Razorpay (UPI, card, netbanking, wallet) |
 | SMS Notifications | Twilio via Cloudflare Worker or local Node server |
 | Weather Data API | OpenWeatherMap API |
 | Geolocation | HTML5 Geolocation API, IP-API |
+| Internationalization | react-i18next (6 languages: EN, HI, MR, GU, TA, TE) |
 
 ---
 
@@ -276,15 +324,20 @@ Unlike traditional insurance, **no claim filing is required**. Payouts are trigg
 - [x] Parametric claims simulator with four disruption types (weather, AQI, traffic, platform outage)
 - [x] Six-point GPS fraud detection engine (GPS vs IP, platform login, speed anomaly, accuracy fingerprint, frequency, weather mismatch)
 - [x] Disruption history log with aggregate stats and breakdown by type
-- [x] Live GPS map with 17 pre-mapped risk zones across Mumbai, Delhi, Bangalore, Chennai, and Hyderabad
+- [x] Live GPS map with 29 pre-mapped risk zones across 8 Indian cities (Mumbai, Delhi, Bangalore, Hyderabad, Chennai, Kolkata, Pune, Ahmedabad)
 - [x] Real-time rider location tracking with nearest risk zone detection
+- [x] **Disruption prediction model** trained on AQI + IMD rainfall data (DisruptionModel_Colab.ipynb)
+- [x] **ML-driven rerouting simulation** — predicts disruption zones 30 min ahead and reroutes via OSRM real-road alternatives
 - [x] SMS payout notification via Twilio SMS gateway (Cloudflare Worker / Node server)
 - [x] Admin panel with portfolio metrics, BCR monitoring, and 14-day monsoon stress test
 - [x] Google Colab notebook for ML model training and Streamlit visualizer
+- [x] AI chatbot powered by Google Gemini API
+- [x] Supabase backend integration (auth, policy data, claims persistence)
+- [x] Multilingual i18n support (English, Hindi, Marathi, Gujarati, Tamil, Telugu)
 - [x] Deployed to Vercel: [https://gig-inc-three.vercel.app](https://gig-inc-three.vercel.app)
 
 ### Phase 3 — Core Backend Integration 
-- [ ] Connect production PostgreSQL database for persistent user and claims data
+- [x] Supabase PostgreSQL backend for persistent user and claims data
 - [ ] Aadhaar eKYC via DigiLocker API
 - [ ] Implement secure UPI auto-debit for recurring weekly premiums
 - [ ] Real platform status API polling (Swiggy, Zomato, Amazon) for outage triggers
@@ -292,7 +345,7 @@ Unlike traditional insurance, **no claim filing is required**. Payouts are trigg
 - [ ] IRDAI Regulatory Sandbox application
 - [ ] Partner with a licensed insurer as risk carrier
 - [ ] Native Android app for offline-capable access
-- [ ] Multi-language support (Tamil, Telugu, Hindi)
+- [x] Multi-language support (English, Hindi, Marathi, Gujarati, Tamil, Telugu)
 
 ---
 
@@ -334,6 +387,9 @@ cp .env.example .env
 VITE_OPENWEATHER_API_KEY=your_openweather_api_key
 VITE_RAZORPAY_KEY_ID=your_razorpay_key_id
 VITE_SMS_API_URL=http://localhost:8787/api/sms/send
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_GEMINI_API_KEY=your_gemini_api_key
 TWILIO_ACCOUNT_SID=your_twilio_account_sid
 TWILIO_AUTH_TOKEN=your_twilio_auth_token
 TWILIO_FROM_NUMBER=+1XXXXXXXXXX
