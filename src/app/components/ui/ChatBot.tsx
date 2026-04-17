@@ -32,14 +32,14 @@ export function ChatBot() {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end font-sans">
+    <div className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-[5000] flex flex-col items-end font-sans pointer-events-none">
       <AnimatePresence>
         {isOpen && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="mb-4 w-80 md:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden h-[500px]"
+            className="pointer-events-auto mb-4 w-[calc(100vw-2rem)] max-w-80 md:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden h-[min(500px,70vh)]"
           >
             {/* Header */}
             <div className="bg-brand-500 p-4 text-white flex justify-between items-center shadow-md">
@@ -105,7 +105,7 @@ export function ChatBot() {
 
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-14 h-14 bg-brand-500 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform active:scale-95"
+        className="pointer-events-auto w-14 h-14 bg-brand-500 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform active:scale-95"
       >
         <MessageCircle className="w-7 h-7" />
       </button>

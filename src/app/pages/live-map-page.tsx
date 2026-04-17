@@ -116,30 +116,53 @@ function straightPath(a: [number, number], b: [number, number], steps = 10): [nu
   });
 }
 
-// Build a curved reroute that arcs around the danger midpoint
-function safeReroute(
+function buildFallbackSafePath(
   origin: [number, number],
+  escape: [number, number],
   dest: [number, number],
-  danger: [number, number],
-  steps = 14,
 ): [number, number][] {
-  const mx = (origin[0] + dest[0]) / 2;
-  const my = (origin[1] + dest[1]) / 2;
-  // Perpendicular offset away from the danger zone
-  const dx = dest[1] - origin[1];
-  const dy = -(dest[0] - origin[0]);
-  const len = Math.hypot(dx, dy) || 1;
-  const offsetMag = 0.015; // ~1.6 km arc bulge
-  const sign = (mx - danger[0]) * dy - (my - danger[1]) * dx > 0 ? 1 : -1;
-  const cx = mx + sign * (dx / len) * offsetMag;
-  const cy = my + sign * (dy / len) * offsetMag;
-  // Quadratic Bézier: origin → (cx, cy) → dest
-  return Array.from({ length: steps + 1 }, (_, i) => {
-    const t = i / steps;
-    const lat = (1 - t) ** 2 * origin[0] + 2 * (1 - t) * t * cx + t * t * dest[0];
-    const lng = (1 - t) ** 2 * origin[1] + 2 * (1 - t) * t * cy + t * t * dest[1];
-    return [lat, lng] as [number, number];
+  const legA = straightPath(origin, escape, 8);
+  const legB = straightPath(escape, dest, 10);
+  return [...legA, ...legB.slice(1)];
+}
+
+function routeIntersectsDanger(
+  path: [number, number][],
+  danger: [number, number],
+  dangerRadiusM: number,
+  ignoreFirstPoints = 2,
+): boolean {
+  return path.some(([lat, lng], idx) => {
+    if (idx < ignoreFirstPoints) return false;
+    const dMeters = getDistanceFromLatLonInKm(lat, lng, danger[0], danger[1]) * 1000;
+    return dMeters <= dangerRadiusM;
   });
+}
+
+function projectAwayFromDanger(
+  danger: [number, number],
+  origin: [number, number],
+  distanceM: number,
+): [number, number] {
+  const latScale = 111320;
+  const avgLatRad = ((danger[0] + origin[0]) / 2) * (Math.PI / 180);
+  const lngScale = Math.max(25000, 111320 * Math.cos(avgLatRad));
+
+  let vecLatM = (origin[0] - danger[0]) * latScale;
+  let vecLngM = (origin[1] - danger[1]) * lngScale;
+  let norm = Math.hypot(vecLatM, vecLngM);
+
+  if (norm < 1) {
+    vecLatM = 1;
+    vecLngM = 1;
+    norm = Math.hypot(vecLatM, vecLngM);
+  }
+
+  const unitLatM = vecLatM / norm;
+  const unitLngM = vecLngM / norm;
+  const lat = danger[0] + (unitLatM * distanceM) / latScale;
+  const lng = danger[1] + (unitLngM * distanceM) / lngScale;
+  return [lat, lng];
 }
 
 const BIKE_ICON_HTML = `
@@ -245,7 +268,7 @@ export function LiveMapPage() {
       : [19.0760, 72.8777];
 
     // Synthetic destination ~4 km NE of origin (a realistic delivery hop)
-    const destination: [number, number] = [origin[0] + 0.032, origin[1] + 0.028];
+    const baseDestination: [number, number] = [origin[0] + 0.032, origin[1] + 0.028];
 
     // Predict 30-minute-ahead disruption via the ML model — city resolved from live GPS
     const futureWindow = new Date(Date.now() + 30 * 60 * 1000);
@@ -253,36 +276,48 @@ export function LiveMapPage() {
     const forecast = await predictDisruption(cityName, futureWindow, 180, 45);
     setPredictedRisk({ score: forecast.overallRisk, leadMin: 30 });
 
-    // Danger predicted roughly on the midpoint of the direct path
-    const danger: [number, number] = [
-      (origin[0] + destination[0]) / 2 + 0.002,
-      (origin[1] + destination[1]) / 2 - 0.002,
-    ];
+    // Anchor disruption around the worker's nearest real risk zone, not an arbitrary midpoint.
+    const nearest = getNearestZone(origin[0], origin[1]);
+    const zoneCfg = riskConfig[nearest.zone.risk as keyof typeof riskConfig];
+    const danger: [number, number] = [nearest.zone.lat, nearest.zone.lng];
+    const dangerRadiusM = zoneCfg.radius;
+    const originDistM = nearest.distanceKm * 1000;
+    const isInsideDangerZone = originDistM <= dangerRadiusM;
 
-    const shouldReroute = forecast.overallRisk >= 55;
+    const shouldReroute = forecast.overallRisk >= 55 || (isInsideDangerZone && nearest.zone.risk !== "low");
 
-    // Bypass waypoint: normalized perpendicular unit vector × 0.025° (~2.8 km) — well outside 1200 m danger radius
-    const dirLat = destination[0] - origin[0];
-    const dirLng = destination[1] - origin[1];
-    const perpLat = -dirLng;
-    const perpLng = dirLat;
-    const perpLen = Math.hypot(perpLat, perpLng) || 1;
-    const SAFE_OFFSET = 0.025;
-    const bypassWp: [number, number] = [
-      danger[0] + (perpLat / perpLen) * SAFE_OFFSET,
-      danger[1] + (perpLng / perpLen) * SAFE_OFFSET,
-    ];
+    // Ensure the destination is outside the disruption zone.
+    const baseDestinationInsideDanger =
+      getDistanceFromLatLonInKm(baseDestination[0], baseDestination[1], danger[0], danger[1]) * 1000 <= dangerRadiusM + 300;
+    const destination = baseDestinationInsideDanger
+      ? projectAwayFromDanger(danger, origin, dangerRadiusM + 3500)
+      : baseDestination;
+
+    // Build an escape waypoint that pushes the driver outside the danger boundary.
+    const escapeWaypoint = projectAwayFromDanger(danger, origin, dangerRadiusM + 1200);
+    const widenedEscapeWaypoint = projectAwayFromDanger(danger, origin, dangerRadiusM + 2200);
 
     // Fetch real road routes via OSRM; fall back to geometric paths
-    const [directRoad, safeRoad] = await Promise.all([
+    const [directRoad, safeRoadInitial] = await Promise.all([
       fetchRoadRoute([origin, destination]),
-      shouldReroute ? fetchRoadRoute([origin, bypassWp, destination]) : Promise.resolve([] as [number, number][]),
+      shouldReroute ? fetchRoadRoute([origin, escapeWaypoint, destination]) : Promise.resolve([] as [number, number][]),
     ]);
 
-    const activePath = shouldReroute && safeRoad.length > 0
-      ? safeRoad
-      : shouldReroute
-      ? safeReroute(origin, destination, danger)
+    // If first safe route still clips danger, request a wider escape corridor.
+    let safeRoad = safeRoadInitial;
+    if (
+      shouldReroute &&
+      safeRoad.length > 0 &&
+      routeIntersectsDanger(safeRoad, danger, dangerRadiusM + 100)
+    ) {
+      safeRoad = await fetchRoadRoute([origin, widenedEscapeWaypoint, destination]);
+    }
+
+    const fallbackSafe = buildFallbackSafePath(origin, widenedEscapeWaypoint, destination);
+    const activePath = shouldReroute
+      ? safeRoad.length > 0 && !routeIntersectsDanger(safeRoad, danger, dangerRadiusM + 100)
+        ? safeRoad
+        : fallbackSafe
       : directRoad.length > 0
       ? directRoad
       : straightPath(origin, destination);
@@ -293,10 +328,10 @@ export function LiveMapPage() {
 
     // Predicted disruption zone (what the model flagged)
     simDangerZone.current = L.circle(danger, {
-      radius: 1200,
+      radius: dangerRadiusM,
       color: shouldReroute ? "#dc2626" : "#f59e0b",
       fillColor: shouldReroute ? "#fecaca" : "#fef3c7",
-      fillOpacity: 0.45,
+      fillOpacity: 0.3,
       weight: 2,
       dashArray: "4 4",
     })
