@@ -2,29 +2,98 @@
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { MapPin, Navigation, Shield, AlertTriangle, Wifi, WifiOff, RefreshCw, Crosshair } from "lucide-react";
+import { MapPin, Navigation, Shield, AlertTriangle, Wifi, WifiOff, RefreshCw, Crosshair, Zap, Bike, Satellite } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import { getDistanceFromLatLonInKm } from "../../services/mockApi";
+import { loadDisruptionModel, predictDisruption } from "../../services/mlEngine";
+import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({ iconRetinaUrl: markerIcon2x, iconUrl: markerIcon, shadowUrl: markerShadow });
 
 const riskZones = [
+  // Mumbai
   { lat: 19.076, lng: 72.877, risk: "high", area: "Dharavi, Mumbai", reason: "Heavy flooding, poor drainage" },
-  { lat: 19.033, lng: 73.03, risk: "medium", area: "Navi Mumbai", reason: "Moderate rainfall risk" },
+  { lat: 19.033, lng: 73.030, risk: "medium", area: "Navi Mumbai", reason: "Moderate rainfall risk" },
   { lat: 19.121, lng: 72.858, risk: "low", area: "Andheri, Mumbai", reason: "Good infrastructure" },
+  { lat: 18.961, lng: 72.832, risk: "high", area: "Kurla, Mumbai", reason: "Chronic waterlogging during monsoon" },
+  { lat: 19.052, lng: 72.899, risk: "medium", area: "Chembur, Mumbai", reason: "Industrial AQI exposure" },
+  // Delhi
+  { lat: 28.614, lng: 77.209, risk: "high", area: "Connaught Place, Delhi", reason: "Dense traffic, severe winter fog" },
+  { lat: 28.670, lng: 77.103, risk: "high", area: "Rohini, Delhi", reason: "Extreme AQI in winter season" },
+  { lat: 28.536, lng: 77.391, risk: "medium", area: "Noida Sector 18", reason: "Heavy peak-hour congestion" },
+  { lat: 28.458, lng: 77.027, risk: "low", area: "Gurgaon, Delhi NCR", reason: "Modern drainage, lower flood risk" },
+  { lat: 28.700, lng: 77.230, risk: "medium", area: "Burari, Delhi", reason: "Seasonal flooding, uneven drainage" },
+  // Bangalore
+  { lat: 12.972, lng: 77.595, risk: "medium", area: "MG Road, Bangalore", reason: "Traffic congestion, poor drainage" },
+  { lat: 12.934, lng: 77.624, risk: "high", area: "Koramangala, Bangalore", reason: "Repeated flooding, encroached lakes" },
+  { lat: 13.010, lng: 77.552, risk: "low", area: "Hebbal, Bangalore", reason: "Elevated terrain, better drainage" },
+  { lat: 12.900, lng: 77.499, risk: "medium", area: "Banashankari, Bangalore", reason: "Moderate traffic disruption risk" },
+  // Hyderabad
+  { lat: 17.385, lng: 78.487, risk: "medium", area: "Secunderabad", reason: "Flash flood risk during heavy rain" },
+  { lat: 17.449, lng: 78.381, risk: "high", area: "Kukatpally, Hyderabad", reason: "Waterlogging, high traffic density" },
+  { lat: 17.366, lng: 78.476, risk: "low", area: "Banjara Hills, Hyderabad", reason: "Elevated, good road quality" },
+  // Chennai
+  { lat: 13.083, lng: 80.271, risk: "high", area: "Adyar, Chennai", reason: "Cyclone & coastal flood risk" },
+  { lat: 13.052, lng: 80.249, risk: "medium", area: "T Nagar, Chennai", reason: "Congestion, moderate storm drain risk" },
+  { lat: 13.142, lng: 80.305, risk: "low", area: "Kolathur, Chennai", reason: "Inland, lower flood exposure" },
+  { lat: 13.000, lng: 80.200, risk: "high", area: "Velachery, Chennai", reason: "Severe flooding zone (2015 floods)" },
+  // Kolkata
+  { lat: 22.573, lng: 88.364, risk: "high", area: "Tiljala, Kolkata", reason: "Severe waterlogging, poor drainage" },
+  { lat: 22.519, lng: 88.322, risk: "medium", area: "Behala, Kolkata", reason: "Cyclone Amphan damage prone area" },
+  { lat: 22.574, lng: 88.433, risk: "low", area: "Salt Lake, Kolkata", reason: "Planned sector, better infrastructure" },
+  // Pune
+  { lat: 18.520, lng: 73.857, risk: "high", area: "Sinhagad Road, Pune", reason: "Landslide risk during heavy rain" },
+  { lat: 18.530, lng: 73.876, risk: "medium", area: "Shivajinagar, Pune", reason: "Congestion & moderate flood risk" },
+  { lat: 18.493, lng: 73.855, risk: "low", area: "Kothrud, Pune", reason: "Well-planned, lower disruption risk" },
+  // Ahmedabad
+  { lat: 23.022, lng: 72.571, risk: "medium", area: "Maninagar, Ahmedabad", reason: "Flash floods during heavy rain" },
+  { lat: 23.071, lng: 72.524, risk: "high", area: "Vatva, Ahmedabad", reason: "Industrial pollution, poor drainage" },
+  { lat: 23.033, lng: 72.585, risk: "low", area: "Navrangpura, Ahmedabad", reason: "Central, better infrastructure" },
 ];
 
 const riskConfig = {
-  high: { color: "#ef4444", fillColor: "#fca5a5", label: "highRisk", radius: 18000 },
-  medium: { color: "#f59e0b", fillColor: "#fde68a", label: "mediumRisk", radius: 15000 },
-  low: { color: "#22c55e", fillColor: "#bbf7d0", label: "lowRisk", radius: 12000 },
+  high: { color: "#dc2626", fillColor: "#f87171", label: "highRisk", radius: 18000 },
+  medium: { color: "#d97706", fillColor: "#fbbf24", label: "mediumRisk", radius: 15000 },
+  low: { color: "#16a34a", fillColor: "#4ade80", label: "lowRisk", radius: 12000 },
 };
+
+const OSM_TILES = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const SAT_TILES = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+
+const MODEL_CITIES: Record<string, [number, number]> = {
+  Mumbai: [19.076, 72.8777], Delhi: [28.6139, 77.209], Bangalore: [12.9716, 77.5946],
+  Hyderabad: [17.385, 78.4867], Chennai: [13.0827, 80.2707], Kolkata: [22.5726, 88.3639],
+  Pune: [18.5204, 73.8567], Ahmedabad: [23.0225, 72.5714],
+};
+
+function nearestModelCity(lat: number, lng: number): string {
+  let best = "Mumbai", bestDist = Infinity;
+  for (const [city, [clat, clng]] of Object.entries(MODEL_CITIES)) {
+    const d = Math.hypot(lat - clat, lng - clng);
+    if (d < bestDist) { bestDist = d; best = city; }
+  }
+  return best;
+}
+
+async function fetchRoadRoute(waypoints: [number, number][]): Promise<[number, number][]> {
+  try {
+    const coords = waypoints.map(([lat, lng]) => `${lng},${lat}`).join(";");
+    const res = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`,
+    );
+    const data = await res.json();
+    if (data.code !== "Ok" || !data.routes?.[0]) return waypoints;
+    return data.routes[0].geometry.coordinates.map(([lng, lat]: [number, number]) => [lat, lng] as [number, number]);
+  } catch {
+    return waypoints;
+  }
+}
 
 function getNearestZone(lat: number, lng: number) {
   let nearest = riskZones[0];
@@ -39,6 +108,51 @@ function getNearestZone(lat: number, lng: number) {
   return { zone: nearest, distanceKm: Math.round(minDist) };
 }
 
+// Build a straight multi-waypoint path between two coords
+function straightPath(a: [number, number], b: [number, number], steps = 10): [number, number][] {
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const t = i / steps;
+    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t] as [number, number];
+  });
+}
+
+// Build a curved reroute that arcs around the danger midpoint
+function safeReroute(
+  origin: [number, number],
+  dest: [number, number],
+  danger: [number, number],
+  steps = 14,
+): [number, number][] {
+  const mx = (origin[0] + dest[0]) / 2;
+  const my = (origin[1] + dest[1]) / 2;
+  // Perpendicular offset away from the danger zone
+  const dx = dest[1] - origin[1];
+  const dy = -(dest[0] - origin[0]);
+  const len = Math.hypot(dx, dy) || 1;
+  const offsetMag = 0.015; // ~1.6 km arc bulge
+  const sign = (mx - danger[0]) * dy - (my - danger[1]) * dx > 0 ? 1 : -1;
+  const cx = mx + sign * (dx / len) * offsetMag;
+  const cy = my + sign * (dy / len) * offsetMag;
+  // Quadratic Bézier: origin → (cx, cy) → dest
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const t = i / steps;
+    const lat = (1 - t) ** 2 * origin[0] + 2 * (1 - t) * t * cx + t * t * dest[0];
+    const lng = (1 - t) ** 2 * origin[1] + 2 * (1 - t) * t * cy + t * t * dest[1];
+    return [lat, lng] as [number, number];
+  });
+}
+
+const BIKE_ICON_HTML = `
+  <div style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;
+    background:#009AFD;border-radius:50%;border:3px solid white;
+    box-shadow:0 2px 8px rgba(0,154,253,0.5);">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+      fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="5" cy="17" r="3"/><circle cx="19" cy="17" r="3"/>
+      <path d="M9 17h6M14 17V9l-3-3H9m5 0h3l2 4"/>
+    </svg>
+  </div>`;
+
 export function LiveMapPage() {
   const { t } = useTranslation("livemap");
   const mapRef = useRef<HTMLDivElement>(null);
@@ -47,19 +161,32 @@ export function LiveMapPage() {
   const accuracyCircle = useRef<L.Circle | null>(null);
   const watchId = useRef<number | null>(null);
   const hasFlown = useRef(false);
+  const simDriverMark = useRef<L.Marker | null>(null);
+  const simOrigPath = useRef<L.Polyline | null>(null);
+  const simReroutePath = useRef<L.Polyline | null>(null);
+  const simDangerZone = useRef<L.Circle | null>(null);
+  const simAnimFrame = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [coords, setCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [status, setStatus] = useState<"idle" | "tracking" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [nearestZone, setNearest] = useState<{ zone: typeof riskZones[0]; distanceKm: number } | null>(null);
   const [pingCount, setPingCount] = useState(0);
+  const [simMode, setSimMode] = useState<"off" | "active">("off");
+  const [simStep, setSimStep] = useState(0);
+  const [simTotal, setSimTotal] = useState(0);
+  const [predictedRisk, setPredictedRisk] = useState<{ score: number; leadMin: number } | null>(null);
+  const [isSatellite, setIsSatellite] = useState(false);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+
+  useEffect(() => { loadDisruptionModel(); }, []);
 
   useEffect(() => {
     if (!mapRef.current || mapInst.current) return;
     const map = L.map(mapRef.current, { center: [20.5937, 78.9629], zoom: 5, scrollWheelZoom: true, zoomControl: true });
     mapInst.current = map;
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    tileLayerRef.current = L.tileLayer(OSM_TILES, {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(map);
@@ -69,8 +196,8 @@ export function LiveMapPage() {
       L.circle([zone.lat, zone.lng], {
         color: cfg.color,
         fillColor: cfg.fillColor,
-        fillOpacity: 0.35,
-        weight: 1.5,
+        fillOpacity: 0.55,
+        weight: 2.5,
         radius: cfg.radius,
       })
         .addTo(map)
@@ -91,6 +218,144 @@ export function LiveMapPage() {
     setStatus("idle");
   };
 
+  const clearSimulation = () => {
+    if (simAnimFrame.current) clearInterval(simAnimFrame.current);
+    simAnimFrame.current = null;
+    simDriverMark.current?.remove(); simDriverMark.current = null;
+    simOrigPath.current?.remove(); simOrigPath.current = null;
+    simReroutePath.current?.remove(); simReroutePath.current = null;
+    simDangerZone.current?.remove(); simDangerZone.current = null;
+    setSimStep(0);
+    setSimTotal(0);
+    setSimMode("off");
+    setPredictedRisk(null);
+  };
+
+  const simulateDisruption = async () => {
+    const map = mapInst.current;
+    if (!map) return;
+
+    // Anchor on live GPS; fall back to cached coords; else use Mumbai default
+    const cached = localStorage.getItem("insuregig_gps_coords");
+    const cachedObj = cached ? JSON.parse(cached) : null;
+    const origin: [number, number] = coords
+      ? [coords.lat, coords.lng]
+      : cachedObj
+      ? [cachedObj.lat, cachedObj.lon]
+      : [19.0760, 72.8777];
+
+    // Synthetic destination ~4 km NE of origin (a realistic delivery hop)
+    const destination: [number, number] = [origin[0] + 0.032, origin[1] + 0.028];
+
+    // Predict 30-minute-ahead disruption via the ML model — city resolved from live GPS
+    const futureWindow = new Date(Date.now() + 30 * 60 * 1000);
+    const cityName = nearestModelCity(origin[0], origin[1]);
+    const forecast = await predictDisruption(cityName, futureWindow, 180, 45);
+    setPredictedRisk({ score: forecast.overallRisk, leadMin: 30 });
+
+    // Danger predicted roughly on the midpoint of the direct path
+    const danger: [number, number] = [
+      (origin[0] + destination[0]) / 2 + 0.002,
+      (origin[1] + destination[1]) / 2 - 0.002,
+    ];
+
+    const shouldReroute = forecast.overallRisk >= 55;
+
+    // Bypass waypoint: normalized perpendicular unit vector × 0.025° (~2.8 km) — well outside 1200 m danger radius
+    const dirLat = destination[0] - origin[0];
+    const dirLng = destination[1] - origin[1];
+    const perpLat = -dirLng;
+    const perpLng = dirLat;
+    const perpLen = Math.hypot(perpLat, perpLng) || 1;
+    const SAFE_OFFSET = 0.025;
+    const bypassWp: [number, number] = [
+      danger[0] + (perpLat / perpLen) * SAFE_OFFSET,
+      danger[1] + (perpLng / perpLen) * SAFE_OFFSET,
+    ];
+
+    // Fetch real road routes via OSRM; fall back to geometric paths
+    const [directRoad, safeRoad] = await Promise.all([
+      fetchRoadRoute([origin, destination]),
+      shouldReroute ? fetchRoadRoute([origin, bypassWp, destination]) : Promise.resolve([] as [number, number][]),
+    ]);
+
+    const activePath = shouldReroute && safeRoad.length > 0
+      ? safeRoad
+      : shouldReroute
+      ? safeReroute(origin, destination, danger)
+      : directRoad.length > 0
+      ? directRoad
+      : straightPath(origin, destination);
+
+    clearSimulation();
+    setSimMode("active");
+    setSimTotal(activePath.length);
+
+    // Predicted disruption zone (what the model flagged)
+    simDangerZone.current = L.circle(danger, {
+      radius: 1200,
+      color: shouldReroute ? "#dc2626" : "#f59e0b",
+      fillColor: shouldReroute ? "#fecaca" : "#fef3c7",
+      fillOpacity: 0.45,
+      weight: 2,
+      dashArray: "4 4",
+    })
+      .addTo(map)
+      .bindPopup(
+        `<b>Predicted disruption (T+30 min)</b><br/>` +
+          `Risk score: ${forecast.overallRisk}/100<br/>` +
+          `Weather ${Math.round(forecast.weather * 100)}% · AQI ${Math.round(forecast.aqi * 100)}% · ` +
+          `Traffic ${Math.round(forecast.traffic * 100)}%<br/>` +
+          `Source: ${forecast.source}`,
+      );
+
+    // Direct (unsafe) path shown dashed when we reroute
+    simOrigPath.current = L.polyline(directRoad.length > 0 ? directRoad : straightPath(origin, destination), {
+      color: shouldReroute ? "#9ca3af" : "#009AFD",
+      weight: shouldReroute ? 3 : 4,
+      dashArray: shouldReroute ? "6 5" : undefined,
+      opacity: shouldReroute ? 0.6 : 0.9,
+    })
+      .addTo(map)
+      .bindPopup(shouldReroute ? "<b>Original direct route</b><br/>Crosses predicted risk zone" : "<b>Active route</b>");
+
+    // Reroute (green) only shown when rerouting is triggered
+    if (shouldReroute) {
+      simReroutePath.current = L.polyline(activePath, {
+        color: "#22c55e", weight: 4, opacity: 0.95,
+      })
+        .addTo(map)
+        .bindPopup("<b>AI-rerouted safe path</b><br/>Avoiding predicted disruption");
+    }
+
+    const bikeIcon = L.divIcon({ className: "", html: BIKE_ICON_HTML, iconSize: [36, 36], iconAnchor: [18, 18] });
+    simDriverMark.current = L.marker(activePath[0], { icon: bikeIcon, zIndexOffset: 2000 })
+      .addTo(map)
+      .bindPopup("<b>Driver in transit</b>");
+
+    const bounds = L.latLngBounds([origin, destination, danger]);
+    map.flyToBounds(bounds, { padding: [60, 60], duration: 1.2 });
+
+    toast[shouldReroute ? "warning" : "success"](
+      shouldReroute
+        ? `ML forecast: ${forecast.overallRisk}/100 risk in 30 min — rerouting driver`
+        : `ML forecast: ${forecast.overallRisk}/100 — route is clear`,
+    );
+
+    let step = 0;
+    simAnimFrame.current = setInterval(() => {
+      step++;
+      if (step >= activePath.length) {
+        clearInterval(simAnimFrame.current!);
+        simAnimFrame.current = null;
+        toast.success("Driver reached destination safely");
+        return;
+      }
+      simDriverMark.current?.setLatLng(activePath[step]);
+      setSimStep(step);
+    }, 700);
+  };
+
   const startTracking = () => {
     if (!navigator.geolocation) {
       setErrorMsg(t("locationFailed"));
@@ -104,9 +369,13 @@ export function LiveMapPage() {
 
     const riderIcon = L.divIcon({
       className: "",
-      html: `<div style="width:18px;height:18px;border-radius:50%;background:#009AFD;border:3px solid white;"></div>`,
-      iconSize: [18, 18],
-      iconAnchor: [9, 9],
+      html: `<div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:#1a1a1a;border-radius:50%;border:2.5px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="0">
+          <circle cx="12" cy="7" r="4"/><path d="M12 14c-5 0-8 2.5-8 4v1h16v-1c0-1.5-3-4-8-4z"/>
+        </svg>
+      </div>`,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
     });
 
     watchId.current = navigator.geolocation.watchPosition(
@@ -161,7 +430,21 @@ export function LiveMapPage() {
     }
   };
 
-  useEffect(() => () => stopTracking(), []);
+  const toggleSatellite = () => {
+    const map = mapInst.current;
+    if (!map || !tileLayerRef.current) return;
+    tileLayerRef.current.remove();
+    const next = !isSatellite;
+    tileLayerRef.current = L.tileLayer(next ? SAT_TILES : OSM_TILES, {
+      attribution: next
+        ? "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP"
+        : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(map);
+    setIsSatellite(next);
+  };
+
+  useEffect(() => () => { stopTracking(); clearSimulation(); }, []);
 
   const nearRisk = nearestZone?.zone.risk as keyof typeof riskConfig | undefined;
   const riskBadgeColor = nearRisk === "high" ? "bg-red-100 text-red-700 border-red-200" : nearRisk === "medium" ? "bg-amber-100 text-amber-700 border-amber-200" : "bg-green-100 text-green-700 border-green-200";
@@ -175,7 +458,19 @@ export function LiveMapPage() {
           </h1>
           <p className="text-gray-500 mt-1 text-sm">{t("subtitle")}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {simMode === "off" ? (
+            <Button variant="outline" onClick={simulateDisruption} className="border-amber-300 text-amber-700 hover:bg-amber-50">
+              <Zap className="w-4 h-4 mr-1" /> Simulate Disruption
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={clearSimulation} className="border-gray-300 text-gray-600">
+              Waypoint {Math.min(simStep + 1, simTotal)}/{simTotal} — Stop
+            </Button>
+          )}
+          <Button variant="outline" onClick={toggleSatellite} className={`border-slate-300 ${isSatellite ? "bg-slate-800 text-white hover:bg-slate-700" : "text-slate-700 hover:bg-slate-50"}`}>
+            <Satellite className="w-4 h-4 mr-1" /> {isSatellite ? "Street" : "Satellite"}
+          </Button>
           {status === "tracking" && (
             <Button variant="outline" onClick={recenter} className="border-brand-200 text-brand-700 hover:bg-brand-50">
               <Crosshair className="w-4 h-4 mr-1" /> {t("recenter")}
@@ -194,6 +489,13 @@ export function LiveMapPage() {
       </div>
 
       <div className="flex flex-wrap gap-3">
+        {simMode === "active" && predictedRisk && (
+          <Badge className={`px-3 py-1.5 text-sm font-medium border ${predictedRisk.score >= 55 ? "bg-red-100 text-red-700 border-red-200" : "bg-amber-100 text-amber-700 border-amber-200"}`}>
+            <Bike className="w-3.5 h-3.5 mr-1 inline" />
+            ML forecast T+{predictedRisk.leadMin}min · risk {predictedRisk.score}/100
+            {predictedRisk.score >= 55 ? " · rerouting" : " · route clear"}
+          </Badge>
+        )}
         <Badge className={`px-3 py-1.5 text-sm font-medium ${status === "tracking" ? "bg-green-100 text-green-700 border border-green-200" : status === "error" ? "bg-red-100 text-red-700 border border-red-200" : "bg-gray-100 text-gray-600 border border-gray-200"}`}>
           {status === "tracking" ? <><Wifi className="w-3.5 h-3.5 mr-1 inline" /> {t("gpsPings", { count: pingCount })}</> : status === "error" ? <><AlertTriangle className="w-3.5 h-3.5 mr-1 inline" /> {t("error")}</> : t("trackingOff")}
         </Badge>
@@ -222,11 +524,10 @@ export function LiveMapPage() {
       )}
 
       <Card className="overflow-hidden border-gray-200 shadow-md">
-        <CardHeader className="pb-3 pt-4 px-5 bg-white border-b">
-          <CardTitle className="text-base font-semibold text-gray-800 flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-brand-500" /> {t("liveMap")}
-            {status === "tracking" && <RefreshCw className="w-3.5 h-3.5 ml-1 text-brand-400 animate-spin" />}
-            <span className="ml-auto text-xs font-normal text-gray-400">{t("mapLegendHint")}</span>
+        <CardHeader className="py-2 px-4 bg-white border-b">
+          <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <MapPin className="w-3.5 h-3.5 text-brand-500" /> {t("liveMap")}
+            {status === "tracking" && <RefreshCw className="w-3 h-3 ml-1 text-brand-400 animate-spin" />}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -252,12 +553,7 @@ export function LiveMapPage() {
                 <span className="text-sm text-gray-700 font-medium">{t(cfg.label)}</span>
               </div>
             ))}
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-brand-500 border-2 border-white shadow" />
-              <span className="text-sm text-gray-700 font-medium">{t("yourLocation")}</span>
-            </div>
           </div>
-          <p className="text-xs text-gray-400 mt-3">{t("legendNote")}</p>
         </CardContent>
       </Card>
     </div>

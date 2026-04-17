@@ -79,7 +79,7 @@ export function LandingPage() {
             whileHover={{ scale: 1.05 }}
             transition={{ type: "spring", stiffness: 400 }}
           >
-            <img src={logoGig} alt="InsureGig" className="w-[250px] h-[100px] object-contain object-center" />
+            <img src={logoGig} alt="InsureGig" className="w-[250px] h-[100px] object-contain object-center mix-blend-multiply" />
           </motion.div>
 
           {/* Desktop Nav */}
@@ -175,53 +175,122 @@ export function LandingPage() {
       {/* Hero Section */}
       <section className="relative max-w-7xl mx-auto px-6 py-20">
         <div className="grid md:grid-cols-2 gap-12 items-center">
-          <motion.h1
-            className="text-5xl font-bold text-brand-900 mb-6"
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-          >
-            {t("heroTitle")}
-          </motion.h1>
-
-          <motion.p
-            className="text-xl text-gray-700 mb-4"
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.6 }}
-          >
-            {t("heroSubtitle")}
-          </motion.p>
-
-          <motion.p
-            className="text-lg text-gray-600 mb-8"
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.8 }}
-          >
-            {t("heroDescription")}
-          </motion.p>
-
           <motion.div
-            className="flex gap-4"
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.6, delay: 1 }}
+            initial={{ x: -100, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
           >
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button
-                size="lg"
-                onClick={() => navigate("/auth")}
-                className="bg-brand-500 hover:bg-brand-600"
-              >
-                {t("getStarted")}
-              </Button>
-            </motion.div>
+            <motion.h1
+              className="text-5xl font-bold text-brand-900 mb-6"
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+            >
+              {t("heroTitle")}
+            </motion.h1>
 
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button size="lg" variant="outline">
-                {t("watchDemo")}
-              </Button>
+            <motion.p
+              className="text-xl text-gray-700 mb-4"
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.6 }}
+            >
+              {t("heroSubtitle")}
+            </motion.p>
+
+            <motion.p
+              className="text-lg text-gray-600 mb-8"
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.8 }}
+            >
+              {t("heroDescription")}
+            </motion.p>
+
+            <motion.div
+              className="flex gap-4"
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.6, delay: 1 }}
+            >
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button
+                  size="lg"
+                  onClick={() => navigate("/auth")}
+                  className="bg-brand-500 hover:bg-brand-600"
+                >
+                  {t("getStarted")}
+                </Button>
+              </motion.div>
+
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button size="lg" variant="outline">
+                  {t("watchDemo")}
+                </Button>
+              </motion.div>
+            </motion.div>
+          </motion.div>
+
+          {/* Hero image slideshow */}
+          <motion.div
+            className="relative"
+            initial={{ x: 100, opacity: 0, rotateY: -30 }}
+            animate={{ x: 0, opacity: 1, rotateY: 0 }}
+            transition={{ duration: 1, delay: 0.3 }}
+            style={{ perspective: 1000 }}
+          >
+            <motion.div
+              className="rounded-2xl overflow-hidden shadow-2xl relative"
+              whileHover={{ rotateY: 5, rotateX: -5, scale: 1.02 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              style={{ transformStyle: "preserve-3d" }}
+            >
+              {heroImages.map((img, index) => (
+                <motion.img
+                  key={img}
+                  src={img}
+                  alt={`Delivery worker ${index + 1}`}
+                  className="w-full h-auto absolute inset-0"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: currentImageIndex === index ? 1 : 0 }}
+                  transition={{ duration: 1 }}
+                  style={{ position: index === 0 ? "relative" : "absolute" }}
+                />
+              ))}
+
+              {/* Floating stat — top right */}
+              <motion.div
+                className="absolute top-6 right-6 bg-white/90 backdrop-blur-sm rounded-lg p-4 shadow-lg"
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ delay: 1.5, type: "spring" }}
+                whileHover={{ scale: 1.1, rotate: 5 }}
+              >
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-brand-500" />
+                  <div>
+                    <div className="text-2xl font-bold text-brand-900">10K+</div>
+                    <div className="text-xs text-gray-600">Active Users</div>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Floating stat — bottom left */}
+              <motion.div
+                className="absolute bottom-6 left-6 bg-green-600/90 backdrop-blur-sm rounded-lg p-4 shadow-lg"
+                initial={{ scale: 0, rotate: 180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ delay: 1.7, type: "spring" }}
+                whileHover={{ scale: 1.1, rotate: -5 }}
+              >
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-5 h-5 text-white" />
+                  <div>
+                    <div className="text-2xl font-bold text-white">₹2.5Cr</div>
+                    <div className="text-xs text-green-100">Payouts Processed</div>
+                  </div>
+                </div>
+              </motion.div>
             </motion.div>
           </motion.div>
         </div>

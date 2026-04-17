@@ -193,28 +193,28 @@ export function DashboardHomeLive() {
                 </div>
 
                 <div className="grid flex-1 gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm">
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50/50 px-4 py-3 shadow-sm text-sm">
                     <p className="mb-2 flex items-center gap-2 text-xs font-medium text-gray-500">
                       <Phone className="h-4 w-4 text-brand-500" />
                       {t("phoneTitle")}
                     </p>
                     <p className="text-gray-800">{user.phone || t("notAdded")}</p>
                   </div>
-                  <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm">
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50/50 px-4 py-3 shadow-sm text-sm">
                     <p className="mb-2 flex items-center gap-2 text-xs font-medium text-gray-500">
                       <Mail className="h-4 w-4 text-brand-500" />
                       {t("emailTitle")}
                     </p>
                     <p className="text-gray-800 break-all">{user.email || t("notAdded")}</p>
                   </div>
-                  <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm">
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50/50 px-4 py-3 shadow-sm text-sm">
                     <p className="mb-2 flex items-center gap-2 text-xs font-medium text-gray-500">
                       <MapPin className="h-4 w-4 text-brand-500" />
                       {t("locationTitle")}
                     </p>
                     <p className="text-gray-800">{user.location || t("notAdded")}</p>
                   </div>
-                  <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm">
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50/50 px-4 py-3 shadow-sm text-sm">
                     <p className="mb-2 flex items-center gap-2 text-xs font-medium text-gray-500">
                       <Shield className="h-4 w-4 text-brand-500" />
                       {t("policyTitle")}
@@ -225,16 +225,16 @@ export function DashboardHomeLive() {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/50 px-4 py-3 shadow-sm">
                   <p className="text-xs font-medium text-gray-500">{t("daysActive")}</p>
                   <p className="mt-1 text-xl font-bold text-gray-900">{workdayStats.activeDays}</p>
                 </div>
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/50 px-4 py-3 shadow-sm">
                   <p className="text-xs font-medium text-gray-500">{t("highestHoursWorked")}</p>
                   <p className="mt-1 text-xl font-bold text-gray-900">{workdayStats.highestWorkedHours}h</p>
                   <p className="mt-1 text-xs text-gray-500">{formatFullDate(workdayStats.highestWorkedDate)}</p>
                 </div>
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/50 px-4 py-3 shadow-sm">
                   <p className="text-xs font-medium text-gray-500">{t("averageDailyHours")}</p>
                   <p className="mt-1 text-xl font-bold text-gray-900">{workdayStats.averageHours.toFixed(1)}h</p>
                 </div>

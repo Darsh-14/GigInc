@@ -66,8 +66,8 @@ export function ClaimsPage() {
 
   const maskPhoneNumber = (phone: string) => {
     const digits = phone.replace(/\D/g, "");
-    if (digits.length < 2) return "â€¢â€¢";
-    return `${"â€¢".repeat(Math.max(0, digits.length - 2))}${digits.slice(-2)}`;
+    if (digits.length < 2) return "\u2022\u2022";
+    return `${"\u2022".repeat(Math.max(0, digits.length - 2))}${digits.slice(-2)}`;
   };
 
   const clearHistory = () => {
@@ -535,7 +535,7 @@ export function ClaimsPage() {
 
           <div className="rounded-xl px-4 py-3 flex items-center gap-2" style={{ background: GP.red }}>
             <ShieldCheck className="w-4 h-4 text-white shrink-0" />
-            <p className="text-xs font-semibold text-white tracking-wide">POLICY SUSPENDED â€” PAYOUT BLOCKED â€” PENDING MANUAL REVIEW</p>
+            <p className="text-xs font-semibold text-white tracking-wide">POLICY SUSPENDED | PAYOUT BLOCKED | PENDING MANUAL REVIEW</p>
           </div>
         </div>
       )}

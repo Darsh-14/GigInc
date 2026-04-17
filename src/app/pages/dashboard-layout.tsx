@@ -23,6 +23,13 @@ export function DashboardLayout() {
   const [isPaidUser, setIsPaidUser] = useState(false);
   const [userName, setUserName] = useState("Gig Worker");
 
+  const greeting = (() => {
+    const h = new Date().getHours();
+    if (h < 12) return "Good morning";
+    if (h < 17) return "Good afternoon";
+    return "Good evening";
+  })();
+
   const paidMenuItems = [
     { path: "/dashboard", label: t("dashboard"), icon: LayoutDashboard },
     { path: "/dashboard/plans", label: t("myPolicy"), icon: FileText },
@@ -73,10 +80,10 @@ export function DashboardLayout() {
       <aside className="w-64 bg-white border-r hidden md:flex flex-col">
         <div className="p-6 border-b">
           <div className="flex items-center">
-            <img src={logoGig} alt="InsureGig" className="w-[200px] h-[80px] object-contain object-center" />
+            <img src={logoGig} alt="InsureGig" className="w-[200px] h-[80px] object-contain object-center mix-blend-multiply" />
           </div>
           <div className="mt-4">
-            <p className="text-sm text-gray-500">{t("signedInAs")}</p>
+            <p className="text-sm text-gray-500">{greeting},</p>
             <p className="text-lg font-semibold text-gray-900">{userName}</p>
           </div>
         </div>
@@ -130,9 +137,9 @@ export function DashboardLayout() {
       {/* Mobile Top Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 bg-white border-b p-4 z-20 flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0">
-          <img src={logoGig} alt="InsureGig" className="w-[150px] h-[60px] object-contain object-center shrink-0" />
+          <img src={logoGig} alt="InsureGig" className="w-[150px] h-[60px] object-contain object-center shrink-0 mix-blend-multiply" />
           <div className="min-w-0">
-            <p className="text-xs text-gray-500">{t("signedInAs")}</p>
+            <p className="text-xs text-gray-500">{greeting},</p>
             <p className="text-sm font-semibold text-gray-900 truncate">
               {userName}
             </p>

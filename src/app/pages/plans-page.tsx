@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "../../services/supabaseClient";
 
 const MIN_WEEKLY_PREMIUM = 20;
-const MAX_WEEKLY_PREMIUM = 50;
+const MAX_WEEKLY_PREMIUM = 70;
 
 function clampPremium(amount: number, min = MIN_WEEKLY_PREMIUM, max = MAX_WEEKLY_PREMIUM) {
   return Math.min(max, Math.max(min, Math.round(amount)));
@@ -88,7 +88,7 @@ export function PlansPage() {
         if (!isMounted) return;
 
         const normalPremium = 28;
-        const premiumPremium = clampPremium(basePremium, 33, MAX_WEEKLY_PREMIUM);
+        const premiumPremium = clampPremium(basePremium, 30, MAX_WEEKLY_PREMIUM);
 
         setNormalPlanPremium(normalPremium);
         setPremiumPlanPremium(premiumPremium);

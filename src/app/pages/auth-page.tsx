@@ -129,7 +129,7 @@ export function AuthPage() {
     <div className="min-h-screen bg-gradient-to-br from-brand-50 to-brand-100 flex items-center justify-center p-6">
       <div className="w-full max-w-md my-8">
         <div className="flex items-center justify-center gap-2 mb-8">
-          <img src={logoGig} alt="InsureGig" className="w-[250px] h-[100px] object-contain object-center" />
+          <img src={logoGig} alt="InsureGig" className="w-[250px] h-[100px] object-contain object-center mix-blend-multiply" />
         </div>
 
         <Card>

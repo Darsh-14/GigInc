@@ -97,20 +97,20 @@ export function RiskInsightsPage() {
     ? 55
     : Math.round(Math.min(100, Math.max(5, weatherData.severity * 0.65 + 18 * 0.2 + 40 * 0.15)));
 
-  let riskLevelLabel = t("riskLow") + " 🟢";
+  let riskLevelLabel = t("riskLow");
   let bgGradient = "from-green-50 to-emerald-50";
   let borderColor = "border-green-200";
   let iconBg = "bg-green-500";
   let textColor = "text-green-600";
 
   if (riskScore > 60) {
-    riskLevelLabel = t("riskHigh") + " 🔴";
+    riskLevelLabel = t("riskHigh");
     bgGradient = "from-orange-50 to-red-50";
     borderColor = "border-orange-200";
     iconBg = "bg-orange-500";
     textColor = "text-orange-600";
   } else if (riskScore > 30) {
-    riskLevelLabel = t("riskMedium") + " 🟡";
+    riskLevelLabel = t("riskMedium");
     bgGradient = "from-yellow-50 to-amber-50";
     borderColor = "border-yellow-200";
     iconBg = "bg-yellow-500";
