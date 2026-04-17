@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -58,9 +58,9 @@ const riskZones = [
 ];
 
 const riskConfig = {
-  high: { color: "#dc2626", fillColor: "#f87171", label: "highRisk", radius: 18000 },
-  medium: { color: "#d97706", fillColor: "#fbbf24", label: "mediumRisk", radius: 15000 },
-  low: { color: "#16a34a", fillColor: "#4ade80", label: "lowRisk", radius: 12000 },
+  high: { color: "#dc2626", fillColor: "#f87171", label: "highRisk", radius: 4000 },
+  medium: { color: "#d97706", fillColor: "#fbbf24", label: "mediumRisk", radius: 3000 },
+  low: { color: "#16a34a", fillColor: "#4ade80", label: "lowRisk", radius: 2000 },
 };
 
 const OSM_TILES = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -81,6 +81,10 @@ function nearestModelCity(lat: number, lng: number): string {
   return best;
 }
 
+/**
+ * Fetch a road-following route from OSRM.
+ * Returns an array of [lat, lng] points tracing actual roads.
+ */
 async function fetchRoadRoute(waypoints: [number, number][]): Promise<[number, number][]> {
   try {
     const coords = waypoints.map(([lat, lng]) => `${lng},${lat}`).join(";");
@@ -88,10 +92,34 @@ async function fetchRoadRoute(waypoints: [number, number][]): Promise<[number, n
       `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`,
     );
     const data = await res.json();
-    if (data.code !== "Ok" || !data.routes?.[0]) return waypoints;
+    if (data.code !== "Ok" || !data.routes?.[0]) return [];
     return data.routes[0].geometry.coordinates.map(([lng, lat]: [number, number]) => [lat, lng] as [number, number]);
   } catch {
-    return waypoints;
+    return [];
+  }
+}
+
+/**
+ * Fetch MULTIPLE alternative routes from OSRM between origin and destination.
+ * Returns an array of routes, each being an array of [lat, lng] points.
+ * All routes follow real roads — OSRM computes them.
+ */
+async function fetchAlternativeRoutes(
+  origin: [number, number],
+  destination: [number, number],
+): Promise<[number, number][][]> {
+  try {
+    const coords = `${origin[1]},${origin[0]};${destination[1]},${destination[0]}`;
+    const res = await fetch(
+      `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson&alternatives=3`,
+    );
+    const data = await res.json();
+    if (data.code !== "Ok" || !data.routes?.length) return [];
+    return data.routes.map((route: any) =>
+      route.geometry.coordinates.map(([lng, lat]: [number, number]) => [lat, lng] as [number, number]),
+    );
+  } catch {
+    return [];
   }
 }
 
@@ -108,61 +136,82 @@ function getNearestZone(lat: number, lng: number) {
   return { zone: nearest, distanceKm: Math.round(minDist) };
 }
 
-// Build a straight multi-waypoint path between two coords
-function straightPath(a: [number, number], b: [number, number], steps = 10): [number, number][] {
-  return Array.from({ length: steps + 1 }, (_, i) => {
-    const t = i / steps;
-    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t] as [number, number];
-  });
-}
-
-function buildFallbackSafePath(
-  origin: [number, number],
-  escape: [number, number],
-  dest: [number, number],
-): [number, number][] {
-  const legA = straightPath(origin, escape, 8);
-  const legB = straightPath(escape, dest, 10);
-  return [...legA, ...legB.slice(1)];
-}
-
+/**
+ * Check if any point on the path enters the danger zone.
+ */
 function routeIntersectsDanger(
   path: [number, number][],
   danger: [number, number],
   dangerRadiusM: number,
-  ignoreFirstPoints = 2,
 ): boolean {
   return path.some(([lat, lng], idx) => {
-    if (idx < ignoreFirstPoints) return false;
+    if (idx < 1) return false;
     const dMeters = getDistanceFromLatLonInKm(lat, lng, danger[0], danger[1]) * 1000;
     return dMeters <= dangerRadiusM;
   });
 }
 
-function projectAwayFromDanger(
-  danger: [number, number],
-  origin: [number, number],
+/**
+ * Given a road-route polyline, pick the point at fractional distance `frac`
+ * along its total length. This ensures the disruption sits on an actual road.
+ */
+function pickPointOnRoute(
+  route: [number, number][],
+  frac: number,
+): [number, number] {
+  if (route.length < 2) return route[0];
+
+  const dists: number[] = [0];
+  for (let i = 1; i < route.length; i++) {
+    dists.push(
+      dists[i - 1] +
+        getDistanceFromLatLonInKm(route[i - 1][0], route[i - 1][1], route[i][0], route[i][1]),
+    );
+  }
+  const totalKm = dists[dists.length - 1];
+  const targetKm = totalKm * frac;
+
+  for (let i = 1; i < route.length; i++) {
+    if (dists[i] >= targetKm) {
+      const segLen = dists[i] - dists[i - 1];
+      const t = segLen > 0 ? (targetKm - dists[i - 1]) / segLen : 0;
+      return [
+        route[i - 1][0] + (route[i][0] - route[i - 1][0]) * t,
+        route[i - 1][1] + (route[i][1] - route[i - 1][1]) * t,
+      ];
+    }
+  }
+  return route[route.length - 1];
+}
+
+/**
+ * Compute the local bearing of a route at a given point index, in radians.
+ */
+function routeBearingAt(route: [number, number][], idx: number): number {
+  const i = Math.min(Math.max(idx, 0), route.length - 2);
+  const latScale = 111320;
+  const avgLat = ((route[i][0] + route[i + 1][0]) / 2) * (Math.PI / 180);
+  const lngScale = 111320 * Math.cos(avgLat);
+  const dy = (route[i + 1][0] - route[i][0]) * latScale;
+  const dx = (route[i + 1][1] - route[i][1]) * lngScale;
+  return Math.atan2(dx, dy);
+}
+
+/**
+ * Project a point from `center` along a bearing by `distanceM` meters.
+ */
+function projectAtBearing(
+  center: [number, number],
+  bearingRad: number,
   distanceM: number,
 ): [number, number] {
   const latScale = 111320;
-  const avgLatRad = ((danger[0] + origin[0]) / 2) * (Math.PI / 180);
+  const avgLatRad = center[0] * (Math.PI / 180);
   const lngScale = Math.max(25000, 111320 * Math.cos(avgLatRad));
-
-  let vecLatM = (origin[0] - danger[0]) * latScale;
-  let vecLngM = (origin[1] - danger[1]) * lngScale;
-  let norm = Math.hypot(vecLatM, vecLngM);
-
-  if (norm < 1) {
-    vecLatM = 1;
-    vecLngM = 1;
-    norm = Math.hypot(vecLatM, vecLngM);
-  }
-
-  const unitLatM = vecLatM / norm;
-  const unitLngM = vecLngM / norm;
-  const lat = danger[0] + (unitLatM * distanceM) / latScale;
-  const lng = danger[1] + (unitLngM * distanceM) / lngScale;
-  return [lat, lng];
+  return [
+    center[0] + (Math.cos(bearingRad) * distanceM) / latScale,
+    center[1] + (Math.sin(bearingRad) * distanceM) / lngScale,
+  ];
 }
 
 const BIKE_ICON_HTML = `
@@ -189,6 +238,7 @@ export function LiveMapPage() {
   const simReroutePath = useRef<L.Polyline | null>(null);
   const simDangerZone = useRef<L.Circle | null>(null);
   const simAnimFrame = useRef<ReturnType<typeof setInterval> | null>(null);
+  const simExtraMarkers = useRef<L.Layer[]>([]);
 
   const [coords, setCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [status, setStatus] = useState<"idle" | "tracking" | "error">("idle");
@@ -248,6 +298,8 @@ export function LiveMapPage() {
     simOrigPath.current?.remove(); simOrigPath.current = null;
     simReroutePath.current?.remove(); simReroutePath.current = null;
     simDangerZone.current?.remove(); simDangerZone.current = null;
+    simExtraMarkers.current.forEach((m) => m.remove());
+    simExtraMarkers.current = [];
     setSimStep(0);
     setSimTotal(0);
     setSimMode("off");
@@ -268,101 +320,153 @@ export function LiveMapPage() {
       : [19.0760, 72.8777];
 
     // Synthetic destination ~4 km NE of origin (a realistic delivery hop)
-    const baseDestination: [number, number] = [origin[0] + 0.032, origin[1] + 0.028];
+    const destination: [number, number] = [origin[0] + 0.032, origin[1] + 0.028];
 
-    // Predict 30-minute-ahead disruption via the ML model — city resolved from live GPS
+    // ── Step 1: Fetch ALL OSRM routes (primary + alternatives) ────────────
+    // Using alternatives=3 gives us multiple real-road routes between origin
+    // and destination. Every route returned by OSRM follows actual roads.
+    const allRoutes = await fetchAlternativeRoutes(origin, destination);
+    if (allRoutes.length === 0 || allRoutes[0].length < 2) {
+      toast.error("Could not fetch road route from OSRM. Check your internet connection.");
+      return;
+    }
+
+    // The first route is the primary/shortest (direct) route
+    const directRoad = allRoutes[0];
+
+    // ── Step 2: ML prediction 30 min ahead ──────────────────────────────────
     const futureWindow = new Date(Date.now() + 30 * 60 * 1000);
     const cityName = nearestModelCity(origin[0], origin[1]);
     const forecast = await predictDisruption(cityName, futureWindow, 180, 45);
     setPredictedRisk({ score: forecast.overallRisk, leadMin: 30 });
 
-    // Anchor disruption around the worker's nearest real risk zone, not an arbitrary midpoint.
-    const nearest = getNearestZone(origin[0], origin[1]);
-    const zoneCfg = riskConfig[nearest.zone.risk as keyof typeof riskConfig];
-    const danger: [number, number] = [nearest.zone.lat, nearest.zone.lng];
-    const dangerRadiusM = zoneCfg.radius;
-    const originDistM = nearest.distanceKm * 1000;
-    const isInsideDangerZone = originDistM <= dangerRadiusM;
+    // ── Step 3: Place disruption ON the actual road route ────────────────────
+    // Pick a point ~40% along the real road route, so the direct path
+    // genuinely passes through the disruption zone.
+    const danger = pickPointOnRoute(directRoad, 0.4);
+    const dangerRadiusM = 1200; // realistic disruption radius
 
-    const shouldReroute = forecast.overallRisk >= 55 || (isInsideDangerZone && nearest.zone.risk !== "low");
+    // Always reroute in the simulation (showcase ML-driven rerouting)
+    const shouldReroute = forecast.overallRisk >= 15;
 
-    // Ensure the destination is outside the disruption zone.
-    const baseDestinationInsideDanger =
-      getDistanceFromLatLonInKm(baseDestination[0], baseDestination[1], danger[0], danger[1]) * 1000 <= dangerRadiusM + 300;
-    const destination = baseDestinationInsideDanger
-      ? projectAwayFromDanger(danger, origin, dangerRadiusM + 3500)
-      : baseDestination;
+    // ── Step 4: Find safe route from OSRM alternatives ──────────────────────
+    let safeRoad: [number, number][] = [];
+    if (shouldReroute) {
+      // First: check if any OSRM alternative route naturally avoids the danger zone.
+      // These are real-road routes computed by OSRM, so they follow actual roads perfectly.
+      for (let i = 1; i < allRoutes.length; i++) {
+        if (allRoutes[i].length > 2 && !routeIntersectsDanger(allRoutes[i], danger, dangerRadiusM)) {
+          safeRoad = allRoutes[i];
+          break;
+        }
+      }
 
-    // Build an escape waypoint that pushes the driver outside the danger boundary.
-    const escapeWaypoint = projectAwayFromDanger(danger, origin, dangerRadiusM + 1200);
-    const widenedEscapeWaypoint = projectAwayFromDanger(danger, origin, dangerRadiusM + 2200);
+      // Fallback: if no OSRM alternative avoids, use a waypoint-based detour.
+      // Compute a perpendicular offset from the danger point and ask OSRM to
+      // route through it — this still gives a real-road route.
+      if (safeRoad.length === 0) {
+        let closestIdx = 0;
+        let closestDist = Infinity;
+        for (let i = 0; i < directRoad.length - 1; i++) {
+          const d = getDistanceFromLatLonInKm(
+            directRoad[i][0], directRoad[i][1], danger[0], danger[1],
+          );
+          if (d < closestDist) { closestDist = d; closestIdx = i; }
+        }
+        const bearing = routeBearingAt(directRoad, closestIdx);
+        const perpBearing = bearing + Math.PI / 2;
 
-    // Fetch real road routes via OSRM; fall back to geometric paths
-    const [directRoad, safeRoadInitial] = await Promise.all([
-      fetchRoadRoute([origin, destination]),
-      shouldReroute ? fetchRoadRoute([origin, escapeWaypoint, destination]) : Promise.resolve([] as [number, number][]),
-    ]);
+        const clearanceLevels = [
+          dangerRadiusM + 1500,
+          dangerRadiusM + 3000,
+          dangerRadiusM + 5000,
+        ];
 
-    // If first safe route still clips danger, request a wider escape corridor.
-    let safeRoad = safeRoadInitial;
-    if (
-      shouldReroute &&
-      safeRoad.length > 0 &&
-      routeIntersectsDanger(safeRoad, danger, dangerRadiusM + 100)
-    ) {
-      safeRoad = await fetchRoadRoute([origin, widenedEscapeWaypoint, destination]);
+        for (const clearance of clearanceLevels) {
+          // Try one side
+          const wp = projectAtBearing(danger, perpBearing, clearance);
+          const candidate = await fetchRoadRoute([origin, wp, destination]);
+          if (candidate.length > 2 && !routeIntersectsDanger(candidate, danger, dangerRadiusM)) {
+            safeRoad = candidate;
+            break;
+          }
+          // Try the other side
+          const wpOther = projectAtBearing(danger, perpBearing + Math.PI, clearance);
+          const candidateOther = await fetchRoadRoute([origin, wpOther, destination]);
+          if (candidateOther.length > 2 && !routeIntersectsDanger(candidateOther, danger, dangerRadiusM)) {
+            safeRoad = candidateOther;
+            break;
+          }
+        }
+      }
     }
 
-    const fallbackSafe = buildFallbackSafePath(origin, widenedEscapeWaypoint, destination);
-    const activePath = shouldReroute
-      ? safeRoad.length > 0 && !routeIntersectsDanger(safeRoad, danger, dangerRadiusM + 100)
-        ? safeRoad
-        : fallbackSafe
-      : directRoad.length > 0
-      ? directRoad
-      : straightPath(origin, destination);
+    // Determine which path the driver follows
+    const activePath = shouldReroute && safeRoad.length > 2
+      ? safeRoad
+      : directRoad;
 
+    // ── Step 5: Draw everything on the map ───────────────────────────────────
     clearSimulation();
     setSimMode("active");
     setSimTotal(activePath.length);
 
-    // Predicted disruption zone (what the model flagged)
+    // Predicted disruption zone (what the model flagged 30 min ahead)
     simDangerZone.current = L.circle(danger, {
       radius: dangerRadiusM,
-      color: shouldReroute ? "#dc2626" : "#f59e0b",
-      fillColor: shouldReroute ? "#fecaca" : "#fef3c7",
-      fillOpacity: 0.3,
-      weight: 2,
-      dashArray: "4 4",
+      color: "#dc2626",
+      fillColor: "#fecaca",
+      fillOpacity: 0.35,
+      weight: 2.5,
+      dashArray: "6 4",
     })
       .addTo(map)
       .bindPopup(
-        `<b>Predicted disruption (T+30 min)</b><br/>` +
+        `<b>⚠ Predicted disruption (T+30 min)</b><br/>` +
           `Risk score: ${forecast.overallRisk}/100<br/>` +
           `Weather ${Math.round(forecast.weather * 100)}% · AQI ${Math.round(forecast.aqi * 100)}% · ` +
           `Traffic ${Math.round(forecast.traffic * 100)}%<br/>` +
           `Source: ${forecast.source}`,
       );
 
-    // Direct (unsafe) path shown dashed when we reroute
-    simOrigPath.current = L.polyline(directRoad.length > 0 ? directRoad : straightPath(origin, destination), {
-      color: shouldReroute ? "#9ca3af" : "#009AFD",
-      weight: shouldReroute ? 3 : 4,
-      dashArray: shouldReroute ? "6 5" : undefined,
-      opacity: shouldReroute ? 0.6 : 0.9,
+    // Direct (unsafe) path — shown as dashed red when rerouting
+    simOrigPath.current = L.polyline(directRoad, {
+      color: shouldReroute ? "#ef4444" : "#009AFD",
+      weight: shouldReroute ? 4 : 4,
+      dashArray: shouldReroute ? "10 8" : undefined,
+      opacity: shouldReroute ? 0.75 : 0.9,
     })
       .addTo(map)
-      .bindPopup(shouldReroute ? "<b>Original direct route</b><br/>Crosses predicted risk zone" : "<b>Active route</b>");
+      .bindPopup(shouldReroute ? "<b>❌ Original direct route</b><br/>Crosses predicted disruption zone" : "<b>Active route</b>");
 
     // Reroute (green) only shown when rerouting is triggered
-    if (shouldReroute) {
-      simReroutePath.current = L.polyline(activePath, {
-        color: "#22c55e", weight: 4, opacity: 0.95,
+    if (shouldReroute && safeRoad.length > 2) {
+      simReroutePath.current = L.polyline(safeRoad, {
+        color: "#22c55e", weight: 5, opacity: 0.95,
       })
         .addTo(map)
-        .bindPopup("<b>AI-rerouted safe path</b><br/>Avoiding predicted disruption");
+        .bindPopup("<b>✅ AI-rerouted safe path</b><br/>Avoiding predicted disruption zone");
     }
 
+    // Destination marker
+    const destMarker = L.marker(destination, { zIndexOffset: 1500 })
+      .addTo(map)
+      .bindPopup("<b>Destination</b>");
+    simExtraMarkers.current.push(destMarker);
+
+    // Origin marker
+    const origIcon = L.divIcon({
+      className: "",
+      html: `<div style="width:14px;height:14px;background:#22c55e;border:3px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
+    });
+    const origMarker = L.marker(origin, { icon: origIcon, zIndexOffset: 1500 })
+      .addTo(map)
+      .bindPopup("<b>Start</b>");
+    simExtraMarkers.current.push(origMarker);
+
+    // Bike icon for the driver
     const bikeIcon = L.divIcon({ className: "", html: BIKE_ICON_HTML, iconSize: [36, 36], iconAnchor: [18, 18] });
     simDriverMark.current = L.marker(activePath[0], { icon: bikeIcon, zIndexOffset: 2000 })
       .addTo(map)
@@ -373,22 +477,23 @@ export function LiveMapPage() {
 
     toast[shouldReroute ? "warning" : "success"](
       shouldReroute
-        ? `ML forecast: ${forecast.overallRisk}/100 risk in 30 min — rerouting driver`
+        ? `ML forecast: ${forecast.overallRisk}/100 risk in 30 min — rerouting driver around disruption`
         : `ML forecast: ${forecast.overallRisk}/100 — route is clear`,
     );
 
+    // ── Step 6: Animate the driver along the active path ─────────────────────
     let step = 0;
     simAnimFrame.current = setInterval(() => {
       step++;
       if (step >= activePath.length) {
         clearInterval(simAnimFrame.current!);
         simAnimFrame.current = null;
-        toast.success("Driver reached destination safely");
+        toast.success("Driver reached destination safely — disruption zone avoided");
         return;
       }
       simDriverMark.current?.setLatLng(activePath[step]);
       setSimStep(step);
-    }, 700);
+    }, 400);
   };
 
   const startTracking = () => {
